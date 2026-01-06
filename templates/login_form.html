@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FLYTAU Login</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <div class="container signup-container">
+    <div class="welcome">
+      <h2>Login</h2>
+      <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU Logo">
+    </div>
+
+    {% if error %}
+      <p style="color:red; text-align:center;">{{ error }}</p>
+    {% endif %}
+
+    <table class="signup-table">
+      <tr><td colspan="2" class="form-subtitle">Customer Login (Email + Password)</td></tr>
+      <tr>
+        <td>Email</td>
+        <td><input class="signup-input" type="email" name="customer_email" form="customerLogin" required></td>
+      </tr>
+      <tr>
+        <td>Password</td>
+        <td><input class="signup-input" type="password" name="customer_password" form="customerLogin" required></td>
+      </tr>
+      <tr>
+        <td colspan="2" class="buttons-cell">
+          <form id="customerLogin" action="/login" method="post"></form>
+          <input type="submit" value="Login as Customer" class="btn" form="customerLogin">
+        </td>
+      </tr>
+
+      <tr><td colspan="2" class="form-subtitle">Manager Login (ID + Password)</td></tr>
+      <tr>
+        <td>ID</td>
+        <td><input class="signup-input" type="text" name="manager_id" form="managerLogin" required></td>
+      </tr>
+      <tr>
+        <td>Password</td>
+        <td><input class="signup-input" type="password" name="manager_password" form="managerLogin" required></td>
+      </tr>
+      <tr>
+        <td colspan="2" class="buttons-cell">
+          <form id="managerLogin" action="/login" method="post"></form>
+          <input type="submit" value="Login as Manager" class="btn" form="managerLogin">
+          <a href="/" class="btn btn-secondary">Back to Home</a>
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>

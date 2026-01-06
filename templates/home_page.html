@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>FLYTAU - Home</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+
+<div class="container">
+
+  {% if session.get("role") %}
+
+  <!-- USER HEADER -->
+  <div class="user-bar">
+    <div class="user-left">
+      <div class="user-avatar">
+        {{ session.get("first_name")[0] }}
+      </div>
+
+      <div class="user-text">
+        <div class="user-title" title="{{ session.get('first_name') }}">
+          {{ session.get("first_name") }}
+        </div>
+        <div class="user-subtitle">
+          Logged in as
+          <span class="role-badge role-{{ session.get('role') }}">
+            {{ session.get("role") }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <a href="{{ url_for('logout') }}" class="btn btn-logout">Logout</a>
+  </div>
+
+  <!-- ACTION BUTTONS -->
+  <div class="action-box">
+    {% if session.get("role") == "customer" %}
+      <a href="{{ url_for('search') }}" class="btn main-btn">Search Flights</a>
+      <a href="{{ url_for('my_bookings') }}" class="btn secondary-btn">My Bookings</a>
+    {% elif session.get("role") == "manager" %}
+      <a href="{{ url_for('manager') }}" class="btn admin-btn">Admin Panel</a>
+    {% endif %}
+  </div>
+
+  {% else %}
+
+  <!-- NOT LOGGED IN -->
+  <div class="welcome">
+    <h2>Welcome to <span>FLYTAU</span></h2>
+    <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo">
+  </div>
+
+  <div class="action-box">
+    <a href="{{ url_for('login') }}" class="btn main-btn">Login</a>
+    <a href="{{ url_for('signup') }}" class="btn secondary-btn">Sign Up</a>
+  </div>
+
+  {% endif %}
+
+</div>
+
+</body>
+</html>

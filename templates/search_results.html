@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Flight Results - FLYTAU</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+
+<div class="container wide">
+
+  <div class="welcome">
+    <h2>Flight <span>Results</span></h2>
+    <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="Logo">
+  </div>
+
+  <p style="text-align:center; margin-bottom:14px;">
+    From <b>{{ source }}</b> to <b>{{ dest }}</b> on <b>{{ date }}</b>
+  </p>
+
+  {% if flights %}
+    <div class="results-wrapper">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Flight ID</th>
+            <th>Status</th>
+            <th>Type</th>
+            <th>Departure</th>
+            <th>Arrival</th>
+            <th style="text-align:right;">Action</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for f in flights %}
+            <tr>
+              <td>{{ f["F_ID"] }}</td>
+              <td>
+                <span class="pill pill-{{ f['Status']|lower }}">{{ f["Status"] }}</span>
+              </td>
+              <td>{{ f["Type"] }}</td>
+              <td>
+                {{ f["Date_of_flight"] }}<br>
+                <span class="muted">{{ f["Time_of_flight"] }}</span>
+              </td>
+              <td>
+                {{ f["Date_of_Arrival"] }}<br>
+                <span class="muted">{{ f["Time_of_Arrival"] }}</span>
+              </td>
+
+              <td style="text-align:right;">
+                {% if session.get("role") == "manager" %}
+                  <span class="muted">Managers can't book</span>
+                {% else %}
+                  <form action="{{ url_for('select_flight') }}" method="post" style="display:inline;">
+                    <input type="hidden" name="flight_id" value="{{ f['F_ID'] }}">
+                    <input type="hidden" name="num_tickets" value="{{ num_tickets }}">
+                    <button type="submit" class="btn main-btn btn-small">Select</button>
+                  </form>
+                {% endif %}
+              </td>
+
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p style="text-align:center;">No flights found.</p>
+  {% endif %}
+
+  <div class="action-box" style="margin-top:18px;">
+    <a class="btn main-btn" href="{{ url_for('search') }}">New Search</a>
+    <a class="btn main-btn" href="{{ url_for('home_page') }}">Home</a>
+  </div>
+
+</div>
+
+</body>
+</html>

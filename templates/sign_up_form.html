@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>FLYTAU Sign Up Form</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+
+
+<div class="container signup-container">
+    {% if error %}
+      <p style="color:red; text-align:center;">{{ error }}</p>
+    {% endif %}
+
+    <div class="welcome">
+        <h2>New Customer Sign Up</h2>
+        <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU Logo">
+        </div>
+
+<form action="/signup" method="post">
+
+  <table  class="signup-table">
+      <tr>
+          <td colspan="2" class="form-subtitle">FLYTAU New Customer Sign Up</td>
+      </tr>
+      <tr>
+        <td>First Name</td>
+        <td><input type="text" class="signup-input" name="first_name" required></td>
+      </tr>
+      <tr>
+        <td>Last Name</td>
+        <td><input class="signup-input"  type="text" name="last_name" required></td>
+      </tr>
+        <tr>
+          <td>Email</td>
+          <td><input class="signup-input" type="email" name="email" required></td>
+        </tr>
+
+        <tr>
+          <td>Choose Password</td>
+          <td><input class="signup-input" type="password" name="password" required></td>
+        </tr>
+
+        <tr>
+          <td>Phone Number</td>
+          <td><input class="signup-input" type="text" name="phone" required></td>
+        </tr>
+
+        <tr>
+          <td>Passport Number</td>
+          <td><input class="signup-input" type="text" name="passport" required></td>
+        </tr>
+
+        <tr>
+          <td>Birth Date</td>
+          <td><input class="signup-input" type="date" name="date_of_birth" required></td>
+        </tr>
+
+        <tr>
+            <td colspan="2" class="buttons-cell">
+                <input type="submit" value="Submit" class="btn">
+               <a href="/" class="btn btn-secondary">Back to Home</a>
+            </td>
+        </tr>
+    </table>
+</form>
+</div>
+</body>
+</html>
