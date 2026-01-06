@@ -25,7 +25,7 @@ app.config.update(
     SESSION_COOKIE_SECURE=False
 )
 
-Session(app)wdqw
+Session(app)
 
 @contextmanager
 def db_curr():
