@@ -1,7 +1,248 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Manager Reports</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+  <div class="container wide">
+
+    <!-- Page Title -->
+    <h1 style="text-align:center; margin: 10px 0 6px;">Manager Reports</h1>
+    <p style="text-align:center; opacity:0.75; margin: 0 0 14px;">
+      Operational insights and KPIs
+    </p>
+
+    <!-- Navigation -->
+    <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-bottom:18px;">
+      <a class="btn secondary-btn" href="{{ url_for('manager') }}">← Manager Home</a>
+      <a class="btn secondary-btn" href="{{ url_for('manager_flights') }}">← Back to Flights</a>
+    </div>
+
+    <!-- KPI Cards -->
+    <div style="
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    ">
+      <div class="table-card" style="padding:14px;">
+        <div style="opacity:0.7; font-size:0.95rem;">Average Occupancy (Completed Flights)</div>
+        <div style="font-size:2rem; font-weight:800; margin-top:6px;">
+          {{ "%.1f"|format(avg_occupancy or 0) }}%
+        </div>
+      </div>
+
+      <div class="table-card" style="padding:14px;">
+        <div style="opacity:0.7; font-size:0.95rem;">Total Revenue (All Groups)</div>
+        {% set total_rev = (revenue | sum(attribute='Total_Revenue')) if revenue else 0 %}
+        <div style="font-size:2rem; font-weight:800; margin-top:6px;">
+          {{ "%.2f"|format(total_rev or 0) }}
+        </div>
+      </div>
+
+      <div class="table-card" style="padding:14px;">
+        <div style="opacity:0.7; font-size:0.95rem;">Total Employee Flight Hours</div>
+        {% set total_hours = (employee_hours | sum(attribute='Hours')) if employee_hours else 0 %}
+        <div style="font-size:2rem; font-weight:800; margin-top:6px;">
+          {{ "%.1f"|format(total_hours or 0) }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div style="
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+      align-items: start;
+    ">
+      <div class="table-card" style="padding:14px;">
+        <h3 style="margin:0 0 10px;">Monthly Cancellation Rate</h3>
+        <canvas id="cancelChart" height="140"></canvas>
+        <div style="opacity:0.7; font-size:0.9rem; margin-top:8px;">
+          Note: This works only if Booking.Status is stored as "Cancelled" (not deleted).
+        </div>
+      </div>
+
+      <div class="table-card" style="padding:14px;">
+        <h3 style="margin:0 0 10px;">Flights Performed vs Cancelled (Monthly, per Airplane)</h3>
+        <canvas id="activityChart" height="140"></canvas>
+      </div>
+    </div>
+
+    <!-- Revenue Table -->
+    <div class="table-card" style="padding:10px; margin-bottom:14px;">
+      <h3 style="margin: 8px 8px 12px;">Revenue by Airplane Size / Manufacturer / Class</h3>
+      <div class="table-scroll" style="overflow-x:auto;">
+        <table class="results-table" style="width:100%; min-width:820px;">
+          <thead>
+            <tr>
+              <th>Airplane Size</th>
+              <th>Manufacturer</th>
+              <th>Class</th>
+              <th>Total Revenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if revenue and revenue|length > 0 %}
+              {% for r in revenue %}
+              <tr>
+                <td>{{ r.Airplane_Size }}</td>
+                <td>{{ r.Manufacturer }}</td>
+                <td>{{ r.Class_Type }}</td>
+                <td>{{ "%.2f"|format(r.Total_Revenue or 0) }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="4" style="text-align:center; padding:14px; opacity:0.7;">No data</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Employee Hours Table -->
+    <div class="table-card" style="padding:10px; margin-bottom:14px;">
+      <h3 style="margin: 8px 8px 12px;">Employee Total Flight Hours (Short vs Long)</h3>
+      <div class="table-scroll" style="overflow-x:auto;">
+        <table class="results-table" style="width:100%; min-width:820px;">
+          <thead>
+            <tr>
+              <th>First Name</th>
+              <th>Last Name</th>
+              <th>Category</th>
+              <th>Total Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if employee_hours and employee_hours|length > 0 %}
+              {% for e in employee_hours %}
+              <tr>
+                <td>{{ e.FirstName }}</td>
+                <td>{{ e.LastName }}</td>
+                <td>{{ e.Category }}</td>
+                <td>{{ "%.1f"|format(e.Hours or 0) }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="4" style="text-align:center; padding:14px; opacity:0.7;">No data</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Airplane Activity Table -->
+    <div class="table-card" style="padding:10px; margin-bottom:24px;">
+      <h3 style="margin: 8px 8px 12px;">Monthly Airplane Activity + Dominant Route</h3>
+      <div class="table-scroll" style="overflow-x:auto;">
+        <table class="results-table" style="width:100%; min-width:980px;">
+          <thead>
+            <tr>
+              <th>Airplane ID</th>
+              <th>Year</th>
+              <th>Month</th>
+              <th>Performed Flights</th>
+              <th>Cancelled Flights</th>
+              <th>Utilization (days/30)</th>
+              <th>Dominant Route</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if airplane_activity and airplane_activity|length > 0 %}
+              {% for a in airplane_activity %}
+              <tr>
+                <td>{{ a.A_ID }}</td>
+                <td>{{ a.Year }}</td>
+                <td>{{ a.Month }}</td>
+                <td>{{ a.Performed }}</td>
+                <td>{{ a.Cancelled }}</td>
+                <td>{{ "%.3f"|format(a.Utilization or 0) }}</td>
+                <td style="max-width:360px; white-space:normal;">{{ a.DominantRoute }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="7" style="text-align:center; padding:14px; opacity:0.7;">No data</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Charts JS -->
+  <script>
+    // --- Cancellation Rate chart ---
+    const cancelData = {{ cancellation | tojson }};
+    const cancelLabels = cancelData.map(x => `${x.Year}-${String(x.Month).padStart(2,'0')}`);
+    const cancelRates = cancelData.map(x => Number(x.Rate || 0));
+
+    const cancelCtx = document.getElementById('cancelChart');
+    if (cancelCtx) {
+      new Chart(cancelCtx, {
+        type: 'line',
+        data: {
+          labels: cancelLabels,
+          datasets: [{
+            label: 'Cancellation Rate (%)',
+            data: cancelRates,
+            tension: 0.2
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: true } },
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: 'Percent' } }
+          }
+        }
+      });
+    }
+
+    // --- Activity chart (performed vs cancelled) ---
+    // We aggregate across airplanes per month for a clean chart.
+    const activityData = {{ airplane_activity | tojson }};
+    const map = new Map();
+
+    for (const row of activityData) {
+      const key = `${row.Year}-${String(row.Month).padStart(2,'0')}`;
+      if (!map.has(key)) map.set(key, { performed: 0, cancelled: 0 });
+      const v = map.get(key);
+      v.performed += Number(row.Performed || 0);
+      v.cancelled += Number(row.Cancelled || 0);
+    }
+
+    const keysSorted = Array.from(map.keys()).sort();
+    const performedSeries = keysSorted.map(k => map.get(k).performed);
+    const cancelledSeries = keysSorted.map(k => map.get(k).cancelled);
+
+    const actCtx = document.getElementById('activityChart');
+    if (actCtx) {
+      new Chart(actCtx, {
+        type: 'bar',
+        data: {
+          labels: keysSorted,
+          datasets: [
+            { label: 'Performed Flights', data: performedSeries },
+            { label: 'Cancelled Flights', data: cancelledSeries }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: true } },
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: 'Flights' } }
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>

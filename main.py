@@ -988,40 +988,6 @@ def manager_cancel_flight(flight_id):
     return redirect(url_for("manager_flights"))
 
 
-@app.route("/manager/reports")
-@login_required(role="manager")
-def manager_reports():
-    """
-    ממשק דוחות ניהוליים (כאן: 2 דוחות בסיסיים + נתונים לגרף).
-    """
-    with db_curr() as cursor:
-        # דוח 1: כמות הזמנות לפי סטטוס
-        cursor.execute("""
-            SELECT Status, COUNT(*) AS cnt
-            FROM Booking
-            GROUP BY Status
-            ORDER BY cnt DESC
-        """)
-        bookings_by_status = cursor.fetchall()
-
-        # דוח 2: כמות הזמנות לפי חודש (הכנסות = SUM(Price))
-        cursor.execute("""
-            SELECT DATE_FORMAT(booking_date, '%Y-%m') AS ym,
-                   COUNT(*) AS bookings_cnt,
-                   COALESCE(SUM(Price),0) AS revenue
-            FROM Booking
-            GROUP BY ym
-            ORDER BY ym
-        """)
-        by_month = cursor.fetchall()
-
-    return render_template(
-        "manager_reports.html",
-        bookings_by_status=bookings_by_status,
-        by_month=by_month
-    )
-
-
 @app.route("/manager/flights/<int:flight_id>/crew")
 @login_required(role="manager")
 def manager_flight_crew(flight_id):
@@ -1054,6 +1020,168 @@ def manager_flight_crew(flight_id):
 
     return render_template("manager_flight_crew.html", flight_id=flight_id, crew=crew)
 
+@app.route("/manager/reports")
+@login_required(role="manager")
+def manager_reports():
+    # --- Queries (updated / safer) ---
+    q_avg_occupancy = """
+    SELECT AVG(Occupancy_Rate) * 100 AS Average_Occupancy_Percentage
+    FROM (
+        SELECT 
+            f.F_ID,
+            1.0 * (SELECT COUNT(*) FROM Flight_Ticket ft WHERE ft.F_ID = f.F_ID) /
+            NULLIF((SELECT COUNT(*) FROM Seat s WHERE s.A_ID = f.A_ID), 0) AS Occupancy_Rate
+        FROM Flight f
+        WHERE 
+            f.Date_of_Arrival < CURRENT_DATE
+            OR (f.Date_of_Arrival = CURRENT_DATE AND f.Time_of_Arrival < CURRENT_TIME)
+    ) AS Flight_Stats;
+    """
+
+    # Revenue by plane size/manufacturer/class using ticket prices from Flight
+    q_revenue_by_airplane_class = """
+    SELECT 
+        a.Size AS Airplane_Size,
+        a.Manufacturer,
+        ft.Seat_Class_Type AS Class_Type,
+        SUM(
+          CASE 
+            WHEN LOWER(ft.Seat_Class_Type) = 'business' THEN f.business_ticket_price
+            ELSE f.regular_ticket_price
+          END
+        ) AS Total_Revenue
+    FROM Airplane a
+    JOIN Flight f ON a.A_ID = f.A_ID
+    JOIN Flight_Ticket ft ON f.F_ID = ft.F_ID
+    WHERE ft.Status <> 'Cancelled'
+    GROUP BY a.Size, a.Manufacturer, ft.Seat_Class_Type
+    ORDER BY a.Size, a.Manufacturer, ft.Seat_Class_Type;
+    """
+
+    q_employee_hours = """
+    SELECT 
+        e.FirstName, 
+        e.LastName,
+        CASE 
+            WHEN r.Flight_Duration >= 6 THEN 'Long Flight'
+            ELSE 'Short Flight'
+        END AS Flight_Category,
+        SUM(r.Flight_Duration) AS Total_Flight_Hours
+    FROM Employee e
+    JOIN Flight_Crew fc ON e.E_ID = fc.E_ID
+    JOIN Flight f       ON fc.F_ID = f.F_ID
+    JOIN Route r        ON f.R_ID = r.R_ID
+    WHERE f.Status <> 'Cancelled'
+    GROUP BY e.E_ID, e.FirstName, e.LastName, Flight_Category
+    ORDER BY e.FirstName, e.LastName;
+    """
+
+    # Monthly cancellation rate (works only if you store cancelled bookings in Booking.Status)
+    q_cancellation_rate = """
+    SELECT 
+        YEAR(b.booking_date) AS Year,
+        MONTH(b.booking_date) AS Month,
+        COUNT(DISTINCT b.B_ID) AS Total_Bookings,
+        SUM(CASE WHEN LOWER(b.Status) LIKE '%cancel%' THEN 1 ELSE 0 END) AS Customer_Canceled_Bookings,
+        (SUM(CASE WHEN LOWER(b.Status) LIKE '%cancel%' THEN 1 ELSE 0 END) * 100.0) / COUNT(DISTINCT b.B_ID) AS Cancellation_Rate_Percentage
+    FROM Booking b
+    GROUP BY Year, Month
+    ORDER BY Year ASC, Month ASC;
+    """
+
+    # Monthly activity per airplane + dominant route (MySQL 8+)
+    q_monthly_airplane_activity = """
+    WITH MonthlyBasicStats AS (
+        SELECT 
+            A_ID,
+            YEAR(Date_of_flight) AS Flight_Year,
+            MONTH(Date_of_flight) AS Flight_Month,
+            SUM(CASE WHEN Status <> 'Cancelled' THEN 1 ELSE 0 END) AS Performed_Flights,
+            SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) AS Cancelled_Flights,
+            COUNT(DISTINCT CASE WHEN Status <> 'Cancelled' THEN Date_of_flight END) / 30.0 AS Utilization_Rate
+        FROM Flight
+        GROUP BY A_ID, Flight_Year, Flight_Month
+    ),
+    RouteFrequency AS (
+        SELECT 
+            A_ID,
+            YEAR(Date_of_flight) AS Flight_Year,
+            MONTH(Date_of_flight) AS Flight_Month,
+            R_ID,
+            ROW_NUMBER() OVER (
+                PARTITION BY A_ID, YEAR(Date_of_flight), MONTH(Date_of_flight)
+                ORDER BY COUNT(*) DESC
+            ) AS Route_Rank
+        FROM Flight
+        WHERE Status <> 'Cancelled'
+        GROUP BY A_ID, Flight_Year, Flight_Month, R_ID
+    )
+    SELECT 
+        ms.A_ID,
+        ms.Flight_Year,
+        ms.Flight_Month,
+        ms.Performed_Flights AS Num_Flights_Performed,
+        ms.Cancelled_Flights AS Num_Flights_Cancelled,
+        ms.Utilization_Rate AS Monthly_Utilization,
+        CONCAT(r.Airport_Name_Source, ' -> ', r.Airport_Name_Dest) AS Dominant_Route
+    FROM MonthlyBasicStats ms
+    LEFT JOIN RouteFrequency rf ON ms.A_ID = rf.A_ID 
+        AND ms.Flight_Year = rf.Flight_Year 
+        AND ms.Flight_Month = rf.Flight_Month 
+        AND rf.Route_Rank = 1
+    LEFT JOIN Route r ON rf.R_ID = r.R_ID
+    ORDER BY ms.Flight_Year DESC, ms.Flight_Month DESC, ms.A_ID;
+    """
+
+    with db_curr() as cursor:
+        cursor.execute(q_avg_occupancy)
+        avg_occ_row = cursor.fetchone()
+        avg_occupancy = float(avg_occ_row[0]) if avg_occ_row and avg_occ_row[0] is not None else 0.0
+
+        cursor.execute(q_revenue_by_airplane_class)
+        revenue_rows = cursor.fetchall()
+
+        cursor.execute(q_employee_hours)
+        emp_rows = cursor.fetchall()
+
+        cursor.execute(q_cancellation_rate)
+        cancel_rows = cursor.fetchall()
+
+        cursor.execute(q_monthly_airplane_activity)
+        activity_rows = cursor.fetchall()
+
+    # --- Shape data for template ---
+    revenue = [
+        {"Airplane_Size": r[0], "Manufacturer": r[1], "Class_Type": r[2], "Total_Revenue": float(r[3] or 0)}
+        for r in revenue_rows
+    ]
+
+    employee_hours = [
+        {"FirstName": r[0], "LastName": r[1], "Category": r[2], "Hours": float(r[3] or 0)}
+        for r in emp_rows
+    ]
+
+    cancellation = [
+        {"Year": int(r[0]), "Month": int(r[1]), "Total": int(r[2] or 0),
+         "Canceled": int(r[3] or 0), "Rate": float(r[4] or 0)}
+        for r in cancel_rows
+    ]
+
+    airplane_activity = [
+        {"A_ID": int(r[0]), "Year": int(r[1]), "Month": int(r[2]),
+         "Performed": int(r[3] or 0), "Cancelled": int(r[4] or 0),
+         "Utilization": float(r[5] or 0), "DominantRoute": r[6] or ""}
+        for r in activity_rows
+    ]
+
+    return render_template(
+        "manager_reports.html",
+        avg_occupancy=avg_occupancy,
+        revenue=revenue,
+        employee_hours=employee_hours,
+        cancellation=cancellation,
+        airplane_activity=airplane_activity
+    )
 
 
 if __name__ == "__main__":
