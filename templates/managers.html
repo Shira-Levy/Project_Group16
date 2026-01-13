@@ -1,10 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>FLYTAU for Managers</title>
+  <meta charset="UTF-8" />
+  <title>FLYTAU for Managers</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
-<body>
 
+<body>
+  <div class="container">
+
+    <div class="user-bar">
+      <div class="user-left">
+        <div class="user-avatar">{{ (session.get('first_name','M')[:1] | upper) }}</div>
+        <div class="user-text">
+          <div class="user-title">{{ session.get('first_name','Manager') }}</div>
+          <div class="user-subtitle">
+            Logged in as <span class="role-badge role-manager">manager</span>
+          </div>
+        </div>
+      </div>
+
+      <a class="btn-logout" href="{{ url_for('logout') }}">Logout</a>
+    </div>
+
+    <h2 style="margin: 10px 0 18px;">Admin Panel</h2>
+
+    <div class="action-box" style="flex-direction: column;">
+      <a class="btn main-btn" href="{{ url_for('manager_flights') }}">Manage Flights (Search + Filter + Cancel)</a>
+      <a class="btn secondary-btn" href="{{ url_for('manager_add_flight') }}">Add New Flight</a>
+      <a class="btn secondary-btn" href="{{ url_for('manager_add_crew') }}">Add Crew Member</a>
+      <a class="btn admin-btn" href="{{ url_for('manager_reports') }}">Management Reports</a>
+    </div>
+
+  </div>
 </body>
 </html>

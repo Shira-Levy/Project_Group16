@@ -55,6 +55,15 @@ def next_id(cursor, table, col):
     return cursor.fetchone()[0]
 
 
+def _mysql_time_to_timeobj(t):
+    # mysql TIME sometimes comes as timedelta in your project
+    if isinstance(t, timedelta):
+        total_seconds = int(t.total_seconds())
+        hours = (total_seconds // 3600) % 24
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        return datetime.strptime(f"{hours:02d}:{minutes:02d}:{seconds:02d}", "%H:%M:%S").time()
+    return t
 
 @app.route('/', methods = ['POST','GET'])
 def home_page():
@@ -581,6 +590,469 @@ def cancel_booking(booking_id):
             cursor.close()
         if mydb:
             mydb.close()
+
+
+
+@app.route("/manager/flights")
+@login_required(role="manager")
+def manager_flights():
+    """
+    מנהל רואה את כל הטיסות + אפשרות סינון לפי סטטוס:
+    Active / Full / Completed / Cancelled
+    """
+    status_filter = (request.args.get("status") or "All").strip()
+
+    query = """
+        SELECT
+            f.F_ID,
+            f.Status,
+            f.Type,
+            f.Date_of_flight,
+            f.Time_of_flight,
+            f.Date_of_Arrival,
+            f.Time_of_Arrival,
+            r.Airport_Name_Source,
+            r.Airport_Name_Dest,
+            (SELECT COUNT(*) FROM Seat s WHERE s.A_ID = f.A_ID) AS total_seats,
+            (SELECT COUNT(*) FROM Flight_Ticket t WHERE t.F_ID = f.F_ID) AS booked_seats
+        FROM Flight f
+        JOIN Route r ON r.R_ID = f.R_ID
+        ORDER BY f.Date_of_flight DESC, f.Time_of_flight DESC
+    """
+
+    with db_curr() as cursor:
+        cursor.execute(query)
+        rows = cursor.fetchall()
+
+    now = datetime.now()
+    flights = []
+
+    for r in rows:
+        total_seats = r[9] or 0
+        booked_seats = r[10] or 0
+        seats_left = max(total_seats - booked_seats, 0)
+
+        flight_time = _mysql_time_to_timeobj(r[4])
+        flight_dt = datetime.combine(r[3], flight_time)
+
+        # סטטוס "מחושב" לפי דרישות ההנחיה
+        if (r[1] or "").lower() == "cancelled":
+            computed = "Cancelled"
+        elif flight_dt < now:
+            computed = "Completed"
+        elif seats_left == 0:
+            computed = "Full"
+        else:
+            computed = "Active"
+
+        item = {
+            "F_ID": r[0],
+            "db_status": r[1],
+            "Type": r[2],
+            "Date_of_flight": r[3],
+            "Time_of_flight": flight_time,
+            "Date_of_Arrival": r[5],
+            "Time_of_Arrival": _mysql_time_to_timeobj(r[6]),
+            "Source": r[7],
+            "Dest": r[8],
+            "total_seats": total_seats,
+            "booked_seats": booked_seats,
+            "seats_left": seats_left,
+            "computed_status": computed,
+        }
+
+        if status_filter == "All" or status_filter == computed:
+            flights.append(item)
+
+    return render_template("manager_flights.html", flights=flights, status_filter=status_filter)
+
+
+@app.route("/manager/flights/add", methods=["GET", "POST"])
+@login_required(role="manager")
+def manager_add_flight():
+
+    def load_dropdowns():
+        with db_curr() as cursor:
+            cursor.execute("SELECT A_ID, Size FROM Airplane ORDER BY A_ID")
+            airplanes_local = cursor.fetchall()
+
+            cursor.execute("""
+                SELECT R_ID, Airport_Name_Source, Airport_Name_Dest, Flight_Duration
+                FROM Route
+                ORDER BY R_ID
+            """)
+            routes_local = cursor.fetchall()
+
+        return airplanes_local, routes_local
+
+    # ---------- GET ----------
+    if request.method == "GET":
+        airplanes, routes = load_dropdowns()
+        return render_template("manager_add_flight.html", airplanes=airplanes, routes=routes)
+
+    # ---------- POST ----------
+    stage = (request.form.get("stage") or "").strip()  # "" / "confirm"
+
+    a_id = request.form.get("a_id", type=int)
+    r_id = request.form.get("r_id", type=int)
+    date_f = request.form.get("date_f")   # YYYY-MM-DD
+    time_f = request.form.get("time_f")   # HH:MM
+
+    regular_price = request.form.get("regular_price", type=float)
+    business_price = request.form.get("business_price", type=float)
+
+    airplanes, routes = load_dropdowns()
+
+    if not all([a_id, r_id, date_f, time_f, regular_price is not None, business_price is not None]):
+        return render_template("manager_add_flight.html", airplanes=airplanes, routes=routes,
+                               error="Please fill all fields (including prices).")
+
+    # parse departure datetime
+    try:
+        departure_dt = datetime.strptime(f"{date_f} {time_f}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        return render_template("manager_add_flight.html", airplanes=airplanes, routes=routes,
+                               error="Invalid date/time format.")
+
+    with db_curr() as cursor:
+        # 1) airplane size
+        cursor.execute("SELECT Size FROM Airplane WHERE A_ID = %s", (a_id,))
+        arow = cursor.fetchone()
+        if not arow:
+            return render_template("manager_add_flight.html", airplanes=airplanes, routes=routes,
+                                   error="Invalid airplane selected.")
+        airplane_size = (arow[0] or "").strip().lower()
+
+        # 2) route duration
+        cursor.execute("SELECT Flight_Duration FROM Route WHERE R_ID = %s", (r_id,))
+        rrow = cursor.fetchone()
+        if not rrow or rrow[0] is None:
+            return render_template("manager_add_flight.html", airplanes=airplanes, routes=routes,
+                                   error="Route Flight_Duration is missing.")
+        duration_hours = int(rrow[0])
+
+        # rule: small airplane -> only routes under 6 hours
+        if airplane_size == "small" and duration_hours >= 6:
+            return render_template("manager_add_flight.html", airplanes=airplanes, routes=routes,
+                                   error="Small airplanes can only be assigned to routes under 6 hours.")
+
+        # Type auto by duration
+        f_type = "Short" if duration_hours < 6 else "Long"
+
+        # arrival auto by duration
+        arrival_dt = departure_dt + timedelta(hours=duration_hours)
+        date_a = arrival_dt.date().isoformat()
+        time_a = arrival_dt.time().strftime("%H:%M:%S")
+
+        # requirements: Large->3 pilots + 6 attendants ; Small->2 pilots + 3 attendants
+        if airplane_size == "large":
+            req_pilots, req_attendants = 3, 6
+        else:
+            req_pilots, req_attendants = 2, 3
+
+        new_dep_str = departure_dt.strftime("%Y-%m-%d %H:%M:%S")
+        new_arr_str = arrival_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        # pilots available: trained if long + not busy in overlapping flight
+        pilot_query = """
+        SELECT e.E_ID, e.FirstName, e.LastName
+        FROM Pilot p
+        JOIN Employee e ON e.E_ID = p.E_ID
+        WHERE
+          (%s = 'short' OR LOWER(p.Training_for_long_flights) = 'yes')
+          AND NOT EXISTS (
+            SELECT 1
+            FROM Flight_Crew fc
+            JOIN Flight f ON f.F_ID = fc.F_ID
+            WHERE fc.E_ID = e.E_ID
+              AND LOWER(f.Status) <> 'cancelled'
+              AND TIMESTAMP(f.Date_of_flight, f.Time_of_flight) < %s
+              AND TIMESTAMP(f.Date_of_Arrival, f.Time_of_Arrival) > %s
+          )
+        ORDER BY e.E_ID
+        """
+        cursor.execute(pilot_query, (f_type.lower(), new_arr_str, new_dep_str))
+        available_pilots = cursor.fetchall()
+
+        # attendants available: trained if long + not busy in overlapping flight
+        att_query = """
+        SELECT e.E_ID, e.FirstName, e.LastName
+        FROM Flight_Attendant fa
+        JOIN Employee e ON e.E_ID = fa.E_ID
+        WHERE
+          (%s = 'short' OR LOWER(fa.Training_for_long_flights) = 'yes')
+          AND NOT EXISTS (
+            SELECT 1
+            FROM Flight_Crew fc
+            JOIN Flight f ON f.F_ID = fc.F_ID
+            WHERE fc.E_ID = e.E_ID
+              AND LOWER(f.Status) <> 'cancelled'
+              AND TIMESTAMP(f.Date_of_flight, f.Time_of_flight) < %s
+              AND TIMESTAMP(f.Date_of_Arrival, f.Time_of_Arrival) > %s
+          )
+        ORDER BY e.E_ID
+        """
+        cursor.execute(att_query, (f_type.lower(), new_arr_str, new_dep_str))
+        available_attendants = cursor.fetchall()
+
+        # required by guidelines: if not enough crew -> show message and stop
+        if len(available_pilots) < req_pilots or len(available_attendants) < req_attendants:
+            return render_template(
+                "manager_add_flight.html",
+                airplanes=airplanes,
+                routes=routes,
+                error=(
+                    f"This flight cannot be published: not enough available crew for the selected time. "
+                    f"(Need {req_pilots} pilots and {req_attendants} attendants)"
+                )
+            )
+
+        # ---------- STAGE: show crew selection ----------
+        if stage != "confirm":
+            return render_template(
+                "manager_add_flight_crew.html",
+                a_id=a_id,
+                r_id=r_id,
+                date_f=date_f,
+                time_f=time_f,
+                date_a=date_a,
+                time_a=time_a,
+                duration_hours=duration_hours,
+                airplane_size=airplane_size,
+                f_type=f_type,
+                req_pilots=req_pilots,
+                req_attendants=req_attendants,
+                available_pilots=available_pilots,
+                available_attendants=available_attendants,
+                # ✅ keep prices for confirm stage
+                regular_price=regular_price,
+                business_price=business_price
+            )
+
+        # ---------- STAGE: confirm (create flight + crew) ----------
+        selected_pilots = request.form.getlist("pilots")
+        selected_attendants = request.form.getlist("attendants")
+
+        if len(selected_pilots) != req_pilots:
+            return render_template(
+                "manager_add_flight_crew.html",
+                error=f"Please select exactly {req_pilots} pilot(s).",
+                a_id=a_id, r_id=r_id, date_f=date_f, time_f=time_f,
+                date_a=date_a, time_a=time_a, duration_hours=duration_hours,
+                airplane_size=airplane_size, f_type=f_type,
+                req_pilots=req_pilots, req_attendants=req_attendants,
+                available_pilots=available_pilots,
+                available_attendants=available_attendants,
+                regular_price=regular_price,
+                business_price=business_price
+            )
+
+        if len(selected_attendants) != req_attendants:
+            return render_template(
+                "manager_add_flight_crew.html",
+                error=f"Please select exactly {req_attendants} attendant(s).",
+                a_id=a_id, r_id=r_id, date_f=date_f, time_f=time_f,
+                date_a=date_a, time_a=time_a, duration_hours=duration_hours,
+                airplane_size=airplane_size, f_type=f_type,
+                req_pilots=req_pilots, req_attendants=req_attendants,
+                available_pilots=available_pilots,
+                available_attendants=available_attendants,
+                regular_price=regular_price,
+                business_price=business_price
+            )
+
+        # last safety: prevent duplicates inside selection
+        if len(set(selected_pilots)) != len(selected_pilots) or len(set(selected_attendants)) != len(selected_attendants):
+            return render_template(
+                "manager_add_flight_crew.html",
+                error="Duplicate crew selection detected.",
+                a_id=a_id, r_id=r_id, date_f=date_f, time_f=time_f,
+                date_a=date_a, time_a=time_a, duration_hours=duration_hours,
+                airplane_size=airplane_size, f_type=f_type,
+                req_pilots=req_pilots, req_attendants=req_attendants,
+                available_pilots=available_pilots,
+                available_attendants=available_attendants,
+                regular_price=regular_price,
+                business_price=business_price
+            )
+
+        # insert flight
+        new_f_id = next_id(cursor, "Flight", "F_ID")
+        cursor.execute("""
+            INSERT INTO Flight
+            (F_ID, Status, Type, Date_of_flight, Time_of_flight,
+             Date_of_Arrival, Time_of_Arrival, A_ID, R_ID,
+             regular_ticket_price, business_ticket_price)
+            VALUES
+            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (new_f_id, "Active", f_type, date_f, time_f, date_a, time_a, a_id, r_id,
+              regular_price, business_price))
+
+        # insert crew assignments
+        for e_id in selected_pilots:
+            cursor.execute(
+                "INSERT INTO Flight_Crew (E_ID, F_ID, Duty) VALUES (%s, %s, %s)",
+                (int(e_id), new_f_id, "Pilot")
+            )
+
+        for e_id in selected_attendants:
+            cursor.execute(
+                "INSERT INTO Flight_Crew (E_ID, F_ID, Duty) VALUES (%s, %s, %s)",
+                (int(e_id), new_f_id, "Attendant")
+            )
+
+    return redirect(url_for("manager_flights"))
+
+
+@app.route("/manager/crew/add", methods=["GET", "POST"])
+@login_required(role="manager")
+def manager_add_crew():
+    """
+    הוספת אנשי צוות.
+    הערה: מאחר ובקבצים שהעלית אין את סכמת Employee/Pilot/Attendant המלאה,
+    ייתכן שתצטרכי להתאים שמות טבלאות/עמודות.
+    """
+    if request.method == "GET":
+        return render_template("manager_add_crew.html")
+
+    role = (request.form.get("role") or "").strip()  # Pilot / Attendant
+    e_id = request.form.get("e_id", type=int)
+    first = (request.form.get("first_name") or "").strip()
+    last = (request.form.get("last_name") or "").strip()
+
+    if not all([role, e_id, first, last]):
+        return render_template("manager_add_crew.html", error="Please fill all fields.")
+
+    with db_curr() as cursor:
+        # מינימום: Employee(E_ID, FirstName, LastName) - תתאימי אם יש עוד שדות חובה
+        cursor.execute("""
+            INSERT INTO Employee (E_ID, FirstName, LastName)
+            VALUES (%s, %s, %s)
+        """, (e_id, first, last))
+
+        # טבלאות תפקיד (ייתכן שהשמות אצלכם שונים)
+        if role.lower() == "pilot":
+            cursor.execute("INSERT INTO Pilot (E_ID) VALUES (%s)", (e_id,))
+        elif role.lower() == "attendant":
+            cursor.execute("INSERT INTO Attendant (E_ID) VALUES (%s)", (e_id,))
+        else:
+            return render_template("manager_add_crew.html", error="Role must be Pilot or Attendant.")
+
+    return redirect(url_for("manager"))
+
+@app.route("/manager/flights/cancel/<int:flight_id>", methods=["POST"])
+@login_required(role="manager")
+def manager_cancel_flight(flight_id):
+    """
+    Cancel flight only up to 72 hours before.
+    When cancelled: all active bookings on that flight get full refund => Booking.Price = 0.
+    """
+    with db_curr() as cursor:
+        cursor.execute(
+            "SELECT Date_of_flight, Time_of_flight, Status FROM Flight WHERE F_ID=%s LIMIT 1",
+            (flight_id,)
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            return abort(404)
+
+        flight_date = row[0]
+        flight_time = _mysql_time_to_timeobj(row[1])
+        flight_status = (row[2] or "")
+
+        flight_dt = datetime.combine(flight_date, flight_time)
+        if flight_dt < datetime.now() + timedelta(hours=72):
+            return abort(400, description="Managers can cancel only up to 72 hours before the flight.")
+
+        if flight_status.lower() == "cancelled":
+            return redirect(url_for("manager_flights"))
+
+        # 1) update flight status
+        cursor.execute("UPDATE Flight SET Status='Cancelled' WHERE F_ID=%s", (flight_id,))
+
+        # 2) cancel tickets (optional but logical)
+        cursor.execute("UPDATE Flight_Ticket SET Status='Cancelled' WHERE F_ID=%s", (flight_id,))
+
+        # 3) refund bookings => Price = 0
+        cursor.execute("""
+            UPDATE Booking
+            SET Price = 0
+            WHERE B_ID IN (
+                SELECT DISTINCT B_ID
+                FROM Flight_Ticket
+                WHERE F_ID = %s
+            )
+        """, (flight_id,))
+
+    return redirect(url_for("manager_flights"))
+
+
+@app.route("/manager/reports")
+@login_required(role="manager")
+def manager_reports():
+    """
+    ממשק דוחות ניהוליים (כאן: 2 דוחות בסיסיים + נתונים לגרף).
+    """
+    with db_curr() as cursor:
+        # דוח 1: כמות הזמנות לפי סטטוס
+        cursor.execute("""
+            SELECT Status, COUNT(*) AS cnt
+            FROM Booking
+            GROUP BY Status
+            ORDER BY cnt DESC
+        """)
+        bookings_by_status = cursor.fetchall()
+
+        # דוח 2: כמות הזמנות לפי חודש (הכנסות = SUM(Price))
+        cursor.execute("""
+            SELECT DATE_FORMAT(booking_date, '%Y-%m') AS ym,
+                   COUNT(*) AS bookings_cnt,
+                   COALESCE(SUM(Price),0) AS revenue
+            FROM Booking
+            GROUP BY ym
+            ORDER BY ym
+        """)
+        by_month = cursor.fetchall()
+
+    return render_template(
+        "manager_reports.html",
+        bookings_by_status=bookings_by_status,
+        by_month=by_month
+    )
+
+
+@app.route("/manager/flights/<int:flight_id>/crew")
+@login_required(role="manager")
+def manager_flight_crew(flight_id):
+    query = """
+        SELECT
+            e.E_ID,
+            e.FirstName,
+            e.LastName,
+            fc.Duty
+        FROM Flight_Crew fc
+        JOIN Employee e ON e.E_ID = fc.E_ID
+        WHERE fc.F_ID = %s
+        ORDER BY
+            CASE
+              WHEN LOWER(fc.Duty) = 'pilot' THEN 1
+              WHEN LOWER(fc.Duty) = 'attendant' THEN 2
+              ELSE 3
+            END,
+            e.E_ID
+    """
+
+    with db_curr() as cursor:
+        cursor.execute(query, (flight_id,))
+        crew_rows = cursor.fetchall()
+
+    crew = [
+        {"E_ID": r[0], "FirstName": r[1], "LastName": r[2], "Duty": r[3]}
+        for r in crew_rows
+    ]
+
+    return render_template("manager_flight_crew.html", flight_id=flight_id, crew=crew)
 
 
 

@@ -2,9 +2,88 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>$Title$</title>
+  <title>Add Flight</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-$END$
+  <div class="container">
+    <a class="btn secondary-btn" href="{{ url_for('manager_flights') }}">← Back</a>
+
+    <h2 style="margin-top:10px;">Add New Flight</h2>
+
+    {% if error %}
+      <p style="color:#b00020;"><b>{{ error }}</b></p>
+    {% endif %}
+
+    <form method="post">
+      <!-- ✅ IMPORTANT: tells Python this is stage 1 (go to crew selection) -->
+      <input type="hidden" name="stage" value="select_crew">
+
+      <label><b>Airplane (A_ID)</b></label>
+      <select name="a_id" id="airplaneSelect" class="signup-input" required>
+        {% for a in airplanes %}
+          <option value="{{ a[0] }}" data-size="{{ a[1] }}">{{ a[0] }} — {{ a[1] }}</option>
+        {% endfor %}
+      </select>
+
+      <label><b>Route (R_ID)</b></label>
+      <select name="r_id" id="routeSelect" class="signup-input" required>
+        {% for r in routes %}
+          <option value="{{ r[0] }}" data-duration="{{ r[3] }}">
+            {{ r[0] }} — {{ r[1] }} → {{ r[2] }} ({{ r[3] }}h)
+          </option>
+        {% endfor %}
+      </select>
+
+      <label><b>Flight Date</b></label>
+      <input type="date" name="date_f" class="signup-input" required>
+
+      <label><b>Flight Time</b></label>
+      <input type="time" name="time_f" class="signup-input" required>
+
+      <label><b>Regular Ticket Price</b></label>
+      <input type="number" name="regular_price" class="signup-input" min="0" step="0.01" required>
+
+      <label><b>Business Ticket Price</b></label>
+      <input type="number" name="business_price" class="signup-input" min="0" step="0.01" required>
+
+
+      <button class="btn main-btn" type="submit" style="margin-top:14px;">
+        Next: Select Crew
+      </button>
+    </form>
+  </div>
+
+  <script>
+    const airplaneSelect = document.getElementById("airplaneSelect");
+    const routeSelect = document.getElementById("routeSelect");
+
+    function filterRoutesByAirplane() {
+      const selectedAirplane = airplaneSelect.options[airplaneSelect.selectedIndex];
+      const size = (selectedAirplane.dataset.size || "").toLowerCase();
+      const isSmall = (size === "small");
+
+      let firstEnabledValue = null;
+
+      for (const opt of routeSelect.options) {
+        const dur = Number(opt.dataset.duration || "0");
+        const disable = isSmall && dur >= 6;
+
+        opt.disabled = disable;
+
+        if (!disable && firstEnabledValue === null) {
+          firstEnabledValue = opt.value;
+        }
+      }
+
+      // If current selection is disabled, jump to first enabled
+      if (routeSelect.options[routeSelect.selectedIndex]?.disabled && firstEnabledValue !== null) {
+        routeSelect.value = firstEnabledValue;
+      }
+    }
+
+    airplaneSelect.addEventListener("change", filterRoutesByAirplane);
+    filterRoutesByAirplane(); // initial run
+  </script>
 </body>
 </html>

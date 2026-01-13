@@ -2,9 +2,91 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>$Title$</title>
+  <title>Select Crew</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-$END$
+  <div class="container">
+    <a class="btn secondary-btn" href="{{ url_for('manager_add_flight') }}">← Back</a>
+
+    <h2 style="margin-top:10px;">Select Crew</h2>
+
+    <p>
+      <b>Flight:</b> Airplane {{ a_id }} ({{ airplane_size }}) |
+      Route {{ r_id }} ({{ duration_hours }}h) |
+      Departure: {{ date_f }} {{ time_f }} |
+      Arrival: {{ date_a }} {{ time_a }}
+      <br>
+      <b>Required:</b> {{ req_pilots }} Pilots, {{ req_attendants }} Attendants |
+      <b>Type:</b> {{ f_type }}
+    </p>
+
+    {% if error %}
+      <p style="color:#b00020;"><b>{{ error }}</b></p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('manager_add_flight') }}">
+    <input type="hidden" name="stage" value="confirm">
+
+    <input type="hidden" name="a_id" value="{{ a_id }}">
+    <input type="hidden" name="r_id" value="{{ r_id }}">
+    <input type="hidden" name="date_f" value="{{ date_f }}">
+    <input type="hidden" name="time_f" value="{{ time_f }}">
+
+    <input type="hidden" name="regular_price" value="{{ regular_price }}">
+    <input type="hidden" name="business_price" value="{{ business_price }}">
+
+      <!-- PILOTS -->
+      <label><b>Choose Pilots (select {{ req_pilots }})</b></label>
+      <div class="crew-box" id="pilotsBox" data-max="{{ req_pilots }}">
+        {% for p in available_pilots %}
+          <label class="crew-item">
+            <input type="checkbox" class="pilot-cb" name="pilots" value="{{ p[0] }}">
+            {{ p[0] }} — {{ p[1] }} {{ p[2] }}
+          </label>
+        {% endfor %}
+      </div>
+
+      <!-- ATTENDANTS -->
+      <label><b>Choose Attendants (select {{ req_attendants }})</b></label>
+      <div class="crew-box" id="attendantsBox" data-max="{{ req_attendants }}">
+        {% for a in available_attendants %}
+          <label class="crew-item">
+            <input type="checkbox" class="attendant-cb" name="attendants" value="{{ a[0] }}">
+            {{ a[0] }} — {{ a[1] }} {{ a[2] }}
+          </label>
+        {% endfor %}
+      </div>
+
+      <button class="btn main-btn" type="submit" style="margin-top:14px;">
+        Confirm & Create Flight
+      </button>
+    </form>
+  </div>
+
+  <script>
+    function enforceLimit(boxId, checkboxSelector) {
+      const box = document.getElementById(boxId);
+      if (!box) return;
+
+      const max = parseInt(box.dataset.max || "0", 10);
+      const checkboxes = Array.from(box.querySelectorAll(checkboxSelector));
+
+      function update(e) {
+        const checked = checkboxes.filter(cb => cb.checked);
+
+        // אם עברנו את המקסימום - מבטלים את הבחירה האחרונה
+        if (checked.length > max) {
+          e.target.checked = false;
+          alert("You can select only " + max + " here.");
+        }
+      }
+
+      checkboxes.forEach(cb => cb.addEventListener("change", update));
+    }
+
+    enforceLimit("pilotsBox", ".pilot-cb");
+    enforceLimit("attendantsBox", ".attendant-cb");
+  </script>
 </body>
 </html>
