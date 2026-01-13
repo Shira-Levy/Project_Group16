@@ -1,3 +1,7 @@
+<!-- =========================
+     templates/choose_seats.html
+     POSTS to booking_review (review page)
+     ========================= -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,8 +29,8 @@
     {% endif %}
   </div>
 
-  <!-- ✅ IMPORTANT: goes to review step, not DB insert -->
-  <form action="{{ url_for('booking_review_page') }}" method="post">
+  <!-- ✅ goes to REVIEW step -->
+  <form action="{{ url_for('booking_review') }}" method="post">
     <input type="hidden" name="flight_id" value="{{ flight_id }}">
     <input type="hidden" name="num_tickets" value="{{ num_tickets }}">
 
@@ -45,7 +49,7 @@
             <tr>
               <td>{{ s.col }}{{ s.row }}</td>
               <td>{{ s.class }}</td>
-              <td>{{ "%.2f"|format(s.price) }}</td>
+              <td>{{ "%.2f"|format(s.price|default(0)) }}</td>
               <td style="text-align:right;">
                 <input type="checkbox" name="seats" value="{{ s.value }}" class="seat-check">
               </td>

@@ -1,3 +1,8 @@
+<!-- =========================
+     templates/booking_review.html
+     Shows total BEFORE DB insert
+     Confirm posts to /confirm-booking
+     ========================= -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,44 +18,65 @@
     <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="Logo">
   </div>
 
-  {% if error %}
-    <div class="error-box">
-      <p class="error-message">{{ error }}</p>
+  <p style="text-align:center; margin-bottom:14px;">
+    Please review your selection and confirm the purchase.
+  </p>
+
+  <div class="results-wrapper">
+    <table class="results-table">
+      <thead>
+        <tr>
+          <th>Seat</th>
+          <th>Class</th>
+          <th>Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in seats %}
+          <tr>
+            <td>{{ s.seat }}</td>
+            <td>{{ s.class }}</td>
+            <td>{{ "%.2f"|format(s.price) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:18px; max-width:720px; margin-left:auto; margin-right:auto;">
+    <div style="display:flex; justify-content:space-between; padding:10px 6px;">
+      <span>Economy tickets: <b>{{ econ_count }}</b> × {{ "%.2f"|format(regular_price) }}</span>
+      <span><b>{{ "%.2f"|format(econ_count * regular_price) }}</b></span>
     </div>
-    <div class="action-box" style="margin-top:18px;">
-      <a class="btn main-btn" href="{{ url_for('search') }}">Back to Search</a>
+    <div style="display:flex; justify-content:space-between; padding:10px 6px;">
+      <span>Business tickets: <b>{{ bus_count }}</b> × {{ "%.2f"|format(business_price) }}</span>
+      <span><b>{{ "%.2f"|format(bus_count * business_price) }}</b></span>
     </div>
-  {% else %}
-
-  <div class="table-card" style="margin-top:10px;">
-    <div style="padding:16px;">
-      <p><b>Flight ID:</b> {{ flight_id }}</p>
-      <p><b>Total tickets:</b> {{ num_tickets }}</p>
-
-      <hr style="margin:14px 0;">
-
-      <p><b>Regular / Economy:</b> {{ regular_count }} × {{ "%.2f"|format(regular_price) }} = <b>{{ "%.2f"|format(regular_total) }}</b></p>
-      <p><b>Business:</b> {{ business_count }} × {{ "%.2f"|format(business_price) }} = <b>{{ "%.2f"|format(business_total) }}</b></p>
-
-      <hr style="margin:14px 0;">
-
-      <p style="font-size:18px;"><b>Grand Total:</b> {{ "%.2f"|format(grand_total) }}</p>
-      <p class="muted" style="margin-top:6px;">Cancellation fee will be 5% of the booking total.</p>
+    <hr>
+    <div style="display:flex; justify-content:space-between; padding:10px 6px; font-size:18px;">
+      <span><b>Total</b></span>
+      <span><b>{{ "%.2f"|format(total) }}</b></span>
+    </div>
+    <div style="display:flex; justify-content:space-between; padding:6px 6px; opacity:0.9;">
+      <span>Cancellation fee (5%)</span>
+      <span>{{ "%.2f"|format(cancellation_fee) }}</span>
     </div>
   </div>
 
-  <form action="{{ url_for('confirm_booking') }}" method="post">
-    <input type="hidden" name="flight_id" value="{{ flight_id }}">
-    <input type="hidden" name="num_tickets" value="{{ num_tickets }}">
-    <input type="hidden" name="selected_joined" value="{{ selected_joined }}">
+  <div class="action-box" style="margin-top:18px;">
+    <form action="{{ url_for('book_selected_seats') }}" method="post" style="display:inline;">
+      <input type="hidden" name="flight_id" value="{{ flight_id }}">
+      <input type="hidden" name="num_tickets" value="{{ num_tickets }}">
+      {% for rs in raw_seats %}
+        <input type="hidden" name="seats" value="{{ rs }}">
+      {% endfor %}
+      <button class="btn main-btn" type="submit">Confirm Purchase</button>
+    </form>
 
-    <div class="action-box" style="margin-top:18px;">
-      <button class="btn main-btn" type="submit">Confirm & Pay</button>
-      <a class="btn main-btn" href="{{ url_for('choose_seats', flight_id=flight_id, num_tickets=num_tickets) }}">Back</a>
-    </div>
-  </form>
+    <!-- back to seat selection -->
+    <a class="btn main-btn" href="{{ url_for('choose_seats', flight_id=flight_id, num_tickets=(econ_count+bus_count)) }}">Back</a>
+  </div>
 
-  {% endif %}
 </div>
 
 </body>

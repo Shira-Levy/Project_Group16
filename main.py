@@ -357,10 +357,18 @@ def choose_seats():
         cursor.execute(query_seats, (airplane_id, flight_id))
         seats = cursor.fetchall()
 
-    seat_items = [
-        {"col": s[0], "row": s[1], "class": s[2], "value": f"{s[0]}|{s[1]}|{s[2]}"}
-        for s in seats
-    ]
+    seat_items = []
+    for col, row_num, class_type in seats:
+        cls = (class_type or "").lower()
+        price = business_price if cls == "business" else regular_price
+
+        seat_items.append({
+            "col": col,
+            "row": row_num,
+            "class": class_type,
+            "price": float(price),
+            "value": f"{col}|{row_num}|{class_type}"
+        })
 
     session["last_seats"] = seat_items
 
@@ -417,11 +425,13 @@ def book_selected_seats():
         parsed.append((col, int(row_str), class_type))
 
     with db_curr() as cursor:
-        cursor.execute("SELECT A_ID FROM Flight WHERE F_ID=%s LIMIT 1", (flight_id,))
+        cursor.execute("SELECT A_ID, regular_ticket_price, business_ticket_price FROM Flight WHERE F_ID=%s LIMIT 1", (flight_id,))
         fr = cursor.fetchone()
         if not fr:
             return redirect(url_for("search"))
         airplane_id = fr[0]
+        regular_price_val = float(fr[1] or 0)
+        business_price_val = float(fr[2] or 0)
 
         check_seat_available = """
             SELECT 1
@@ -438,10 +448,18 @@ def book_selected_seats():
             LIMIT 1
         """
 
+        calc_total_price = 0.0
         for col, row_num, class_type in parsed:
             cursor.execute(check_seat_available, (airplane_id, col, row_num, class_type, flight_id))
             if not cursor.fetchone():
                 return render_template("booking_success.html", error="One or more selected seats are no longer available.")
+            
+            if class_type.lower() == 'business':
+                calc_total_price += business_price_val
+            else:
+                calc_total_price += regular_price_val
+
+        calc_cancellation_fee = calc_total_price * 0.05
 
         cursor.execute("SELECT COALESCE(MAX(B_ID), 0) + 1 FROM Booking")
         booking_id = cursor.fetchone()[0]
@@ -451,7 +469,7 @@ def book_selected_seats():
             INSERT INTO Booking (B_ID, Status, Price, Cancellation_Fee, booking_date, booking_time, Client_Email)
             VALUES (%s, %s, %s, %s, CURDATE(), CURTIME(), %s)
             """,
-            (booking_id, "Confirmed", 0, 0, customer_email)
+            (booking_id, "Confirmed", calc_total_price, calc_cancellation_fee, customer_email)
         )
 
         cursor.execute("SELECT COALESCE(MAX(Ticket_ID), 0) + 1 FROM Flight_Ticket")
@@ -1196,74 +1214,61 @@ def manager_reports():
         airplane_activity=airplane_activity
     )
 
-
 @app.route('/booking-review', methods=['POST'])
 def booking_review_page():
-    if session.get("role") != "customer":
-        return redirect(url_for("login"))
-
     flight_id = request.form.get("flight_id")
-    num_tickets = request.form.get("num_tickets", type=int)
-    selected = request.form.getlist("seats")
+    seats = request.form.getlist("seats")
 
-    if not flight_id or not num_tickets or num_tickets < 1:
+    if not flight_id or not seats:
         return redirect(url_for("search"))
 
-    if len(selected) != num_tickets:
-        # מחזיר אותך חזרה לבחירת מושבים עם הודעת שגיאה
-        return redirect(url_for("choose_seats", flight_id=flight_id, num_tickets=num_tickets))
+    seat_data = []
+    total_price = 0.0
 
-    # מפרקים את הבחירה: "A|1|Business"
-    parsed = []
-    for v in selected:
-        col, row_str, class_type = v.split("|")
-        parsed.append((col, int(row_str), class_type))
+    econ_count = 0
+    bus_count = 0
 
-    # מביאים מחירים של הטיסה
     with db_curr() as cursor:
         cursor.execute("""
             SELECT regular_ticket_price, business_ticket_price
             FROM Flight
-            WHERE F_ID=%s
-            LIMIT 1
+            WHERE F_ID = %s
         """, (flight_id,))
-        pr = cursor.fetchone()
+        flight = cursor.fetchone()
 
-    if not pr:
-        return redirect(url_for("search"))
+        regular_price = float(flight[0])
+        business_price = float(flight[1])
 
-    regular_price = float(pr[0] or 0)
-    business_price = float(pr[1] or 0)
+        for seat in seats:
+            col, row, cls = seat.split("|")
+            price = business_price if cls.lower() == "business" else regular_price
+            total_price += price
 
-    # מחשבים סיכום לפי מחלקה
-    econ_count = sum(1 for (_, _, c) in parsed if c.lower() != "business")
-    bus_count  = sum(1 for (_, _, c) in parsed if c.lower() == "business")
+            if cls.lower() == "business":
+                bus_count += 1
+            else:
+                econ_count += 1
 
-    total = econ_count * regular_price + bus_count * business_price
+            seat_data.append({
+                "seat": f"{col}{row}",
+                "class": cls,
+                "price": price
+            })
 
-    # נשמור את כל הפרטים בסשן כדי שבאישור הסופי נכניס ל-DB
-    session["pending_booking"] = {
-        "flight_id": int(flight_id),
-        "num_tickets": int(num_tickets),
-        "selected": selected,
-        "regular_price": regular_price,
-        "business_price": business_price,
-        "econ_count": econ_count,
-        "bus_count": bus_count,
-        "total": total
-    }
+    cancellation_fee = total_price * 0.05
 
-    # תציגי כאן דף review (תיצרי תבנית booking_review.html)
     return render_template(
         "booking_review.html",
+        seats=seat_data,
         flight_id=flight_id,
-        num_tickets=num_tickets,
-        selected=parsed,
         regular_price=regular_price,
         business_price=business_price,
         econ_count=econ_count,
         bus_count=bus_count,
-        total=total
+        total=total_price,
+        cancellation_fee=cancellation_fee,
+        raw_seats=seats,
+        num_tickets=len(seats)
     )
 
 
