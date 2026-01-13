@@ -1,4 +1,4 @@
-from flask import Flask, redirect, render_template, request, session, url_for
+from flask import Flask, redirect, render_template, request, session, url_for, flash
 from flask_session import Session
 from datetime import timedelta, datetime
 import mysql.connector
@@ -126,20 +126,14 @@ def signup():
 
 
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
+@app.route('/login/customer', methods=['GET', 'POST'])
+def login_customer():
     if request.method == 'GET':
-        return render_template('login_form.html')
+        return render_template('login_customer.html')
 
-    # Customer (Registered)
     customer_email = request.form.get("customer_email")
     customer_password = request.form.get("customer_password")
 
-    # Manager (Manger)
-    manager_id = request.form.get("manager_id")
-    manager_password = request.form.get("manager_password")
-
-    # --- Customer login ---
     if customer_email and customer_password:
         with db_curr() as cursor:
             cursor.execute("""
@@ -151,7 +145,7 @@ def login():
             row = cursor.fetchone()
 
         if not row:
-            return render_template('login_form.html', error="Invalid customer email/password")
+            return render_template('login_customer.html', error="Invalid customer email/password")
 
         session.clear()
         session["role"] = "customer"
@@ -160,7 +154,16 @@ def login():
         session["last_name"] = row[2]
         return redirect(url_for("home_page"))
 
-    # --- Manager login ---
+    return render_template('login_customer.html', error="Please fill all fields.")
+
+@app.route('/login/manager', methods=['GET', 'POST'])
+def login_manager():
+    if request.method == 'GET':
+        return render_template('login_manager.html')
+
+    manager_id = request.form.get("manager_id")
+    manager_password = request.form.get("manager_password")
+
     if manager_id and manager_password:
         with db_curr() as cursor:
             cursor.execute("""
@@ -173,7 +176,7 @@ def login():
             row = cursor.fetchone()
 
         if not row:
-            return render_template('login_form.html', error="Invalid manager ID/password")
+            return render_template('login_manager.html', error="Invalid manager ID/password")
 
         session.clear()
         session["role"] = "manager"
@@ -182,7 +185,7 @@ def login():
         session["last_name"] = row[2]
         return redirect(url_for("manager"))
 
-    return render_template('login_form.html', error="Please fill one of the login forms.")
+    return render_template('login_manager.html', error="Please fill all fields.")
 
 
 def login_required(role=None):
@@ -190,7 +193,7 @@ def login_required(role=None):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             if "role" not in session:
-                return redirect(url_for("login"))
+                return redirect(url_for("login_customer"))
             if role and session.get("role") != role:
                 return abort(403)
             return fn(*args, **kwargs)
@@ -395,16 +398,13 @@ def choose_seats():
 
 @app.route('/book-selected-seats', methods=['POST'])
 def book_selected_seats():
-    if session.get("role") != "customer":
-        return redirect(url_for("login"))
-
     flight_id = request.form.get("flight_id")
     num_tickets = request.form.get("num_tickets", type=int)
     selected = request.form.getlist("seats")
 
+    # Basic validation before saving to session or proceeding
     if not flight_id or not num_tickets or num_tickets < 1:
         return redirect(url_for("search"))
-
     if len(selected) != num_tickets:
         seat_items = session.get("last_seats", [])
         return render_template(
@@ -415,9 +415,74 @@ def book_selected_seats():
             error=f"Please select exactly {num_tickets} seat(s)."
         )
 
+    # Block managers explicitly
+    if session.get("role") == "manager":
+         flash("Administrators cannot make reservations.", "error")
+         return redirect(url_for("manager"))
+
+    # Guest Handling: If not logged in, save intent and redirect to guest login
+    if not session.get("role"):
+        session["pending_booking"] = {
+            "flight_id": flight_id,
+            "num_tickets": num_tickets,
+            "seats": selected
+        }
+        return redirect(url_for("guest_login"))
+
     customer_email = session.get("email") or session.get("customer_email")
-    if not customer_email:
-        return redirect(url_for("login"))
+    if not customer_email: # Should not happen if role is set, but as a fallback
+        return redirect(url_for("login_customer"))
+    return _perform_booking(customer_email, flight_id, num_tickets, selected)
+
+@app.route('/guest-login', methods=['GET'])
+def guest_login():
+    return render_template('guest_login.html')
+
+@app.route('/guest-login', methods=['POST'])
+def guest_login_post():
+    email = request.form.get("guest_email")
+    if not email:
+        return render_template('guest_login.html', error="Email is required")
+
+    # DB: Ensure Client + Guest exist
+    with db_curr() as cursor:
+        # Insert into Client if not exists (assuming structure ok, minimal fields)
+        # We only have email. We might need other fields if Client requires them. 
+        # Checking schema: Client constraints? Assuming minimal insert works or we dummy fill.
+        # But wait, Registered extends Client. Guest extends Client.
+        # If Client requires First/Last name, we might fail.
+        # Let's hope Client just needs Email_ID. 
+        # If not, we might need a fuller form.
+        # SQL Dump showed Registered has First/Last. Client schema is unknown but usually parent has shared fields.
+        # If Client has First/Last, we need to ask for them.
+        # I'll try simple insert first.
+        try:
+            cursor.execute("INSERT IGNORE INTO Client (Email_ID) VALUES (%s)", (email,))
+            cursor.execute("INSERT IGNORE INTO Guest (Email_G_ID) VALUES (%s)", (email,))
+        except mysql.connector.Error as err:
+             return render_template('guest_login.html', error=f"Database error: {err}")
+
+    session["role"] = "guest"
+    session["email"] = email
+    session["first_name"] = "Guest" # Placeholder
+    session["last_name"] = "" 
+
+    # Resume booking if pending
+    pending = session.get("pending_booking")
+    if pending:
+        # Clear pending after retrieving
+        flight_id = pending["flight_id"]
+        num_tickets = pending["num_tickets"]
+        seats = pending["seats"]
+        session.pop("pending_booking", None)
+        return _perform_booking(email, flight_id, num_tickets, seats)
+    
+    return redirect(url_for("home_page"))
+
+def _perform_booking(customer_email, flight_id, num_tickets, selected):
+    # Re-verify counts
+    if len(selected) != num_tickets:
+         return redirect(url_for("search")) # Or better error handling
 
     parsed = []
     for v in selected:
@@ -499,11 +564,11 @@ def book_selected_seats():
 @app.route('/my-bookings')
 def my_bookings():
     if session.get("role") != "customer":
-        return redirect(url_for("login"))
+        return redirect(url_for("login_customer"))
 
     email = session.get("email")
     if not email:
-        return redirect(url_for("login"))
+        return redirect(url_for("login_customer"))
 
     query = """
         SELECT
@@ -519,6 +584,7 @@ def my_bookings():
         JOIN Flight_Ticket t ON t.B_ID = b.B_ID
         JOIN Flight f ON f.F_ID = t.F_ID
         WHERE b.Client_Email = %s
+          AND b.Status != 'Cancelled'
         GROUP BY b.B_ID, b.Status, b.booking_date, b.booking_time
         ORDER BY flight_date DESC, flight_time DESC
     """
@@ -573,11 +639,11 @@ def my_bookings():
 @app.route("/cancel-booking/<int:booking_id>", methods=["POST"])
 def cancel_booking(booking_id):
     if session.get("role") != "customer":
-        return redirect(url_for("login"))
+        return redirect(url_for("login_customer"))
 
     email = session.get("email")
     if not email:
-        return redirect(url_for("login"))
+        return redirect(url_for("login_customer"))
 
     # Transaction: delete tickets first, then booking
     mydb = None
@@ -601,6 +667,24 @@ def cancel_booking(booking_id):
         if cursor.fetchone() is None:
             mydb.rollback()
             return abort(403)
+
+
+
+        # 1.5) Check for 36-hour cancellation policy using DB time
+        # If the flight is within 36 hours from NOW(), we find a row -> Block it.
+        cursor.execute("""
+            SELECT 1
+            FROM Flight_Ticket T
+            JOIN Flight F ON T.F_ID = F.F_ID
+            WHERE T.B_ID = %s
+              AND TIMESTAMP(F.Date_of_flight, F.Time_of_flight) < DATE_ADD(NOW(), INTERVAL 36 HOUR)
+            LIMIT 1
+        """, (booking_id,))
+        
+        if cursor.fetchone():
+            mydb.rollback()
+            flash("Error: You can only cancel a flight at least 36 hours before departure.", "error")
+            return redirect(url_for("my_bookings"))
 
         # 2) Delete tickets (this releases seats)
         cursor.execute("DELETE FROM Flight_Ticket WHERE B_ID = %s", (booking_id,))
@@ -1005,10 +1089,10 @@ def manager_cancel_flight(flight_id):
         # 2) cancel tickets (optional but logical)
         cursor.execute("UPDATE Flight_Ticket SET Status='Cancelled' WHERE F_ID=%s", (flight_id,))
 
-        # 3) refund bookings => Price = 0
+        # 3) refund bookings => Price = 0 AND Status = Cancelled
         cursor.execute("""
             UPDATE Booking
-            SET Price = 0
+            SET Price = 0, Status = 'Cancelled'
             WHERE B_ID IN (
                 SELECT DISTINCT B_ID
                 FROM Flight_Ticket

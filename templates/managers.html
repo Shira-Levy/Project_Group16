@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <title>FLYTAU for Managers</title>
@@ -27,25 +28,28 @@
       <a class="btn-logout" href="{{ url_for('logout') }}">Logout</a>
     </div>
 
+    <div style="text-align:right; margin-bottom:10px;">
+      <a class="btn secondary-btn" style="width:auto; display:inline-block;" href="{{ url_for('home_page') }}">🏠
+        Website Home</a>
+    </div>
+
     <h2 style="margin: 10px 0 18px;">Admin Panel</h2>
 
     <div class="action-box" style="flex-direction: column;">
-      <a class="btn main-btn"
-         href="{{ url_for('manager_flights') }}">
+      <a class="btn main-btn" href="{{ url_for('manager_flights') }}">
         Manage Flights
       </a>
 
-      <a class="btn secondary-btn"
-         href="{{ url_for('manager_add_flight') }}">
+      <a class="btn secondary-btn" href="{{ url_for('manager_add_flight') }}">
         Add New Flight
       </a>
 
-      <a class="btn admin-btn"
-         href="{{ url_for('manager_reports') }}">
+      <a class="btn admin-btn" href="{{ url_for('manager_reports') }}">
         Management Reports
       </a>
     </div>
 
   </div>
 </body>
+
 </html>

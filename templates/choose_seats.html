@@ -4,48 +4,50 @@
      ========================= -->
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>Choose Seats - FLYTAU</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
+
 <body>
 
-<div class="container wide">
-  <div class="welcome">
-    <h2>Choose <span>Seats</span></h2>
-    <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="Logo">
-  </div>
+  <div class="container wide">
+    <div class="welcome">
+      <h2>Choose <span>Seats</span></h2>
+      <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="Logo">
+    </div>
 
-  {% if not error %}
+    {% if not error %}
     <p style="text-align:center; margin-bottom:14px;">
       Select exactly <b>{{ num_tickets }}</b> seat(s)
     </p>
-  {% endif %}
-
-  <div class="error-box">
-    {% if error %}
-      <p class="error-message">{{ error }}</p>
     {% endif %}
-  </div>
 
-  <!-- ✅ goes to REVIEW step -->
-  <form action="{{ url_for('booking_review') }}" method="post">
-    <input type="hidden" name="flight_id" value="{{ flight_id }}">
-    <input type="hidden" name="num_tickets" value="{{ num_tickets }}">
+    <div class="error-box">
+      {% if error %}
+      <p class="error-message">{{ error }}</p>
+      {% endif %}
+    </div>
 
-    <div class="results-wrapper">
-      <table class="results-table">
-        <thead>
-          <tr>
-            <th>Seat</th>
-            <th>Class</th>
-            <th>Price</th>
-            <th style="text-align:right;">Select</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for s in seats %}
+    <!-- ✅ goes to REVIEW step -->
+    <form action="{{ url_for('booking_review_page') }}" method="post">
+      <input type="hidden" name="flight_id" value="{{ flight_id }}">
+      <input type="hidden" name="num_tickets" value="{{ num_tickets }}">
+
+      <div class="results-wrapper">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th>Seat</th>
+              <th>Class</th>
+              <th>Price</th>
+              <th style="text-align:right;">Select</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in seats %}
             <tr>
               <td>{{ s.col }}{{ s.row }}</td>
               <td>{{ s.class }}</td>
@@ -54,30 +56,32 @@
                 <input type="checkbox" name="seats" value="{{ s.value }}" class="seat-check">
               </td>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
 
-    <div class="action-box" style="margin-top:18px;">
-      <button class="btn main-btn" type="submit">Continue</button>
-      <a class="btn main-btn" href="{{ url_for('search') }}">Back</a>
-    </div>
-  </form>
-</div>
+      <div class="action-box" style="margin-top:18px;">
+        <button class="btn main-btn" type="submit">Continue</button>
+        <a class="btn main-btn" href="{{ url_for('search') }}">Back</a>
+        <a class="btn secondary-btn" href="{{ url_for('home_page') }}">🏠 Home</a>
+      </div>
+    </form>
+  </div>
 
-<script>
-  const maxSeats = {{ num_tickets }};
-  const checks = Array.from(document.querySelectorAll('.seat-check'));
+  <script>
+    const maxSeats = {{ num_tickets }};
+    const checks = Array.from(document.querySelectorAll('.seat-check'));
 
-  function enforceLimit() {
-    const selected = checks.filter(c => c.checked).length;
-    checks.forEach(c => { if (!c.checked) c.disabled = selected >= maxSeats; });
-  }
+    function enforceLimit() {
+      const selected = checks.filter(c => c.checked).length;
+      checks.forEach(c => { if (!c.checked) c.disabled = selected >= maxSeats; });
+    }
 
-  checks.forEach(c => c.addEventListener('change', enforceLimit));
-  enforceLimit();
-</script>
+    checks.forEach(c => c.addEventListener('change', enforceLimit));
+    enforceLimit();
+  </script>
 
 </body>
+
 </html>

@@ -1,18 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>Add Flight</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
+
 <body>
   <div class="container">
-    <a class="btn secondary-btn" href="{{ url_for('manager_flights') }}">← Back</a>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <a class="btn secondary-btn" style="width:auto; display:inline-block; margin:0;"
+        href="{{ url_for('manager_flights') }}">← Back</a>
+      <a class="btn secondary-btn" style="width:auto; display:inline-block; margin:0;"
+        href="{{ url_for('home_page') }}">🏠 Home</a>
+    </div>
 
     <h2 style="margin-top:10px;">Add New Flight</h2>
 
     {% if error %}
-      <p style="color:#b00020;"><b>{{ error }}</b></p>
+    <p style="color:#b00020;"><b>{{ error }}</b></p>
     {% endif %}
 
     <form method="post">
@@ -22,16 +29,16 @@
       <label><b>Airplane (A_ID)</b></label>
       <select name="a_id" id="airplaneSelect" class="signup-input" required>
         {% for a in airplanes %}
-          <option value="{{ a[0] }}" data-size="{{ a[1] }}">{{ a[0] }} — {{ a[1] }}</option>
+        <option value="{{ a[0] }}" data-size="{{ a[1] }}">{{ a[0] }} — {{ a[1] }}</option>
         {% endfor %}
       </select>
 
       <label><b>Route (R_ID)</b></label>
       <select name="r_id" id="routeSelect" class="signup-input" required>
         {% for r in routes %}
-          <option value="{{ r[0] }}" data-duration="{{ r[3] }}">
-            {{ r[0] }} — {{ r[1] }} → {{ r[2] }} ({{ r[3] }}h)
-          </option>
+        <option value="{{ r[0] }}" data-duration="{{ r[3] }}">
+          {{ r[0] }} — {{ r[1] }} → {{ r[2] }} ({{ r[3] }}h)
+        </option>
         {% endfor %}
       </select>
 
@@ -86,4 +93,5 @@
     filterRoutesByAirplane(); // initial run
   </script>
 </body>
+
 </html>

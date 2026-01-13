@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Guest Checkout - FLYTAU</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+    <div class="container signup-container">
+        <div class="welcome">
+            <h2>Guest Checkout</h2>
+            <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU Logo">
+        </div>
+
+        <p style="text-align:center;">Please enter your email to complete the reservation.</p>
+
+        <form action="{{ url_for('guest_login_post') }}" method="post">
+            <table class="signup-table">
+                <tr>
+                    <td>Email</td>
+                    <td><input class="signup-input" type="email" name="guest_email" required></td>
+                </tr>
+                <tr>
+                    <td colspan="2" class="buttons-cell">
+                        <input type="submit" value="Continue" class="btn">
+                    </td>
+                </tr>
+            </table>
+        </form>
+    </div>
+</body>
+
+</html>

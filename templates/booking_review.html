@@ -5,79 +5,84 @@
      ========================= -->
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>Review Booking - FLYTAU</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
+
 <body>
 
-<div class="container wide">
-  <div class="welcome">
-    <h2>Review <span>Booking</span></h2>
-    <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="Logo">
-  </div>
+  <div class="container wide">
+    <div class="welcome">
+      <h2>Review <span>Booking</span></h2>
+      <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="Logo">
+    </div>
 
-  <p style="text-align:center; margin-bottom:14px;">
-    Please review your selection and confirm the purchase.
-  </p>
+    <p style="text-align:center; margin-bottom:14px;">
+      Please review your selection and confirm the purchase.
+    </p>
 
-  <div class="results-wrapper">
-    <table class="results-table">
-      <thead>
-        <tr>
-          <th>Seat</th>
-          <th>Class</th>
-          <th>Price</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for s in seats %}
+    <div class="results-wrapper">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Seat</th>
+            <th>Class</th>
+            <th>Price</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in seats %}
           <tr>
             <td>{{ s.seat }}</td>
             <td>{{ s.class }}</td>
             <td>{{ "%.2f"|format(s.price) }}</td>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
 
-  <div style="margin-top:18px; max-width:720px; margin-left:auto; margin-right:auto;">
-    <div style="display:flex; justify-content:space-between; padding:10px 6px;">
-      <span>Economy tickets: <b>{{ econ_count }}</b> × {{ "%.2f"|format(regular_price) }}</span>
-      <span><b>{{ "%.2f"|format(econ_count * regular_price) }}</b></span>
+    <div style="margin-top:18px; max-width:720px; margin-left:auto; margin-right:auto;">
+      <div style="display:flex; justify-content:space-between; padding:10px 6px;">
+        <span>Economy tickets: <b>{{ econ_count }}</b> × {{ "%.2f"|format(regular_price) }}</span>
+        <span><b>{{ "%.2f"|format(econ_count * regular_price) }}</b></span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:10px 6px;">
+        <span>Business tickets: <b>{{ bus_count }}</b> × {{ "%.2f"|format(business_price) }}</span>
+        <span><b>{{ "%.2f"|format(bus_count * business_price) }}</b></span>
+      </div>
+      <hr>
+      <div style="display:flex; justify-content:space-between; padding:10px 6px; font-size:18px;">
+        <span><b>Total</b></span>
+        <span><b>{{ "%.2f"|format(total) }}</b></span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:6px 6px; opacity:0.9;">
+        <span>Cancellation fee (5%)</span>
+        <span>{{ "%.2f"|format(cancellation_fee) }}</span>
+      </div>
     </div>
-    <div style="display:flex; justify-content:space-between; padding:10px 6px;">
-      <span>Business tickets: <b>{{ bus_count }}</b> × {{ "%.2f"|format(business_price) }}</span>
-      <span><b>{{ "%.2f"|format(bus_count * business_price) }}</b></span>
-    </div>
-    <hr>
-    <div style="display:flex; justify-content:space-between; padding:10px 6px; font-size:18px;">
-      <span><b>Total</b></span>
-      <span><b>{{ "%.2f"|format(total) }}</b></span>
-    </div>
-    <div style="display:flex; justify-content:space-between; padding:6px 6px; opacity:0.9;">
-      <span>Cancellation fee (5%)</span>
-      <span>{{ "%.2f"|format(cancellation_fee) }}</span>
-    </div>
-  </div>
 
-  <div class="action-box" style="margin-top:18px;">
-    <form action="{{ url_for('book_selected_seats') }}" method="post" style="display:inline;">
-      <input type="hidden" name="flight_id" value="{{ flight_id }}">
-      <input type="hidden" name="num_tickets" value="{{ num_tickets }}">
-      {% for rs in raw_seats %}
+    <div class="action-box" style="margin-top:18px;">
+      <form action="{{ url_for('book_selected_seats') }}" method="post" style="display:inline;">
+        <input type="hidden" name="flight_id" value="{{ flight_id }}">
+        <input type="hidden" name="num_tickets" value="{{ num_tickets }}">
+        {% for rs in raw_seats %}
         <input type="hidden" name="seats" value="{{ rs }}">
-      {% endfor %}
-      <button class="btn main-btn" type="submit">Confirm Purchase</button>
-    </form>
+        {% endfor %}
+        <button class="btn main-btn" type="submit">Confirm Purchase</button>
+      </form>
 
-    <!-- back to seat selection -->
-    <a class="btn main-btn" href="{{ url_for('choose_seats', flight_id=flight_id, num_tickets=(econ_count+bus_count)) }}">Back</a>
+      <!-- back to seat selection -->
+      <a class="btn main-btn"
+        href="{{ url_for('choose_seats', flight_id=flight_id, num_tickets=(econ_count+bus_count)) }}">Back</a>
+      <a class="btn secondary-btn" href="{{ url_for('home_page') }}">🏠 Home</a>
+    </div>
+
   </div>
-
-</div>
 
 </body>
+
 </html>

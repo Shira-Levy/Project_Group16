@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <title>My Bookings</title>
@@ -32,6 +33,18 @@
       <a href="{{ url_for('logout') }}" class="btn btn-logout">Logout</a>
     </div>
 
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="error-box"
+      style="margin-bottom: 20px; text-align: center; color: #b00020; border: 1px solid #b00020; background-color: #ffe6e6; padding: 10px; border-radius: 8px;">
+      {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
     <h2 class="form-subtitle">My Bookings</h2>
 
     <div class="action-box">
@@ -43,7 +56,7 @@
     <h2 class="form-subtitle" style="margin-top: 22px;">Upcoming Bookings</h2>
 
     {% if not upcoming %}
-      <div style="
+    <div style="
         margin-top: 10px;
         padding: 14px;
         border-radius: 12px;
@@ -52,68 +65,67 @@
         color: #0f5c33;
         font-weight: 600;
         text-align: center;">
-        No upcoming bookings.
-      </div>
+      No upcoming bookings.
+    </div>
     {% else %}
-      <div class="results-wrapper">
-        <table class="results-table">
-          <thead>
-            <tr>
-              <th>Booking ID</th>
-              <th>Status</th>
-              <th>Booked At</th>
-              <th>Flight ID</th>
-              <th>Flight Date</th>
-              <th>Flight Time</th>
-              <th>Tickets</th>
-              <th class="actions-col">Actions</th>
-            </tr>
-          </thead>
+    <div class="results-wrapper">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Booking ID</th>
+            <th>Status</th>
+            <th>Booked At</th>
+            <th>Flight ID</th>
+            <th>Flight Date</th>
+            <th>Flight Time</th>
+            <th>Tickets</th>
+            <th class="actions-col">Actions</th>
+          </tr>
+        </thead>
 
-          <tbody>
-            {% for b in upcoming %}
-              <tr>
-                <td class="mono">{{ b.B_ID }}</td>
+        <tbody>
+          {% for b in upcoming %}
+          <tr>
+            <td class="mono">{{ b.B_ID }}</td>
 
-                <!-- STATUS COLOR MAPPING -->
-                <td>
-                  {% set s = (b.Status or 'Unknown')|lower %}
-                  {% if s == 'confirmed' %}
-                    <span class="pill pill-active">{{ b.Status }}</span>
-                  {% elif s == 'cancelled' %}
-                    <span class="pill pill-cancelled">{{ b.Status }}</span>
-                  {% elif s == 'scheduled' %}
-                    <span class="pill pill-scheduled">{{ b.Status }}</span>
-                  {% else %}
-                    <span class="pill pill-scheduled">{{ b.Status or 'Unknown' }}</span>
-                  {% endif %}
-                </td>
+            <!-- STATUS COLOR MAPPING -->
+            <td>
+              {% set s = (b.Status or 'Unknown')|lower %}
+              {% if s == 'confirmed' %}
+              <span class="pill pill-active">{{ b.Status }}</span>
+              {% elif s == 'cancelled' %}
+              <span class="pill pill-cancelled">{{ b.Status }}</span>
+              {% elif s == 'scheduled' %}
+              <span class="pill pill-scheduled">{{ b.Status }}</span>
+              {% else %}
+              <span class="pill pill-scheduled">{{ b.Status or 'Unknown' }}</span>
+              {% endif %}
+            </td>
 
-                <td class="mono">{{ b.booking_date }} {{ b.booking_time }}</td>
-                <td class="mono">{{ b.F_ID }}</td>
-                <td class="mono">{{ b.Date_of_flight }}</td>
-                <td class="mono">{{ b.Time_of_flight }}</td>
-                <td class="mono">{{ b.tickets_count }}</td>
+            <td class="mono">{{ b.booking_date }} {{ b.booking_time }}</td>
+            <td class="mono">{{ b.F_ID }}</td>
+            <td class="mono">{{ b.Date_of_flight }}</td>
+            <td class="mono">{{ b.Time_of_flight }}</td>
+            <td class="mono">{{ b.tickets_count }}</td>
 
-                <td class="actions-col">
-                  <form method="POST"
-                        action="{{ url_for('cancel_booking', booking_id=b.B_ID) }}"
-                        onsubmit="return confirm('Are you sure you want to cancel this booking? This will release the seats.');">
-                    <button type="submit" class="btn btn-small secondary-btn">Cancel</button>
-                  </form>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+            <td class="actions-col">
+              <form method="POST" action="{{ url_for('cancel_booking', booking_id=b.B_ID) }}"
+                onsubmit="return confirm('Are you sure you want to cancel this booking? This will release the seats.');">
+                <button type="submit" class="btn btn-small secondary-btn">Cancel</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% endif %}
 
     <!-- ===== PAST BOOKINGS ===== -->
     <h2 class="form-subtitle" style="margin-top: 26px;">Past Bookings</h2>
 
     {% if not past %}
-      <div style="
+    <div style="
         margin-top: 10px;
         padding: 14px;
         border-radius: 12px;
@@ -122,46 +134,47 @@
         color: #7a4c00;
         font-weight: 600;
         text-align: center;">
-        No past bookings.
-      </div>
+      No past bookings.
+    </div>
     {% else %}
-      <div class="results-wrapper">
-        <table class="results-table">
-          <thead>
-            <tr>
-              <th>Booking ID</th>
-              <th>Status</th>
-              <th>Booked At</th>
-              <th>Flight ID</th>
-              <th>Flight Date</th>
-              <th>Flight Time</th>
-              <th>Tickets</th>
-            </tr>
-          </thead>
+    <div class="results-wrapper">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Booking ID</th>
+            <th>Status</th>
+            <th>Booked At</th>
+            <th>Flight ID</th>
+            <th>Flight Date</th>
+            <th>Flight Time</th>
+            <th>Tickets</th>
+          </tr>
+        </thead>
 
-          <tbody>
-            {% for b in past %}
-              <tr>
-                <td class="mono">{{ b.B_ID }}</td>
+        <tbody>
+          {% for b in past %}
+          <tr>
+            <td class="mono">{{ b.B_ID }}</td>
 
-                <!-- Past flights: show Completed + original status -->
-                <td>
-                  <span class="pill pill-active">Completed</span>
-                  <div class="muted">was: {{ b.Status or 'Unknown' }}</div>
-                </td>
+            <!-- Past flights: show Completed + original status -->
+            <td>
+              <span class="pill pill-active">Completed</span>
+              <div class="muted">was: {{ b.Status or 'Unknown' }}</div>
+            </td>
 
-                <td class="mono">{{ b.booking_date }} {{ b.booking_time }}</td>
-                <td class="mono">{{ b.F_ID }}</td>
-                <td class="mono">{{ b.Date_of_flight }}</td>
-                <td class="mono">{{ b.Time_of_flight }}</td>
-                <td class="mono">{{ b.tickets_count }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+            <td class="mono">{{ b.booking_date }} {{ b.booking_time }}</td>
+            <td class="mono">{{ b.F_ID }}</td>
+            <td class="mono">{{ b.Date_of_flight }}</td>
+            <td class="mono">{{ b.Time_of_flight }}</td>
+            <td class="mono">{{ b.tickets_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% endif %}
 
   </div>
 </body>
+
 </html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Customer Login - FLYTAU</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+    <div class="container signup-container">
+        <div class="welcome">
+            <h2>Customer Login</h2>
+            <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU Logo">
+        </div>
+
+        {% if error %}
+        <p style="color:red; text-align:center;">{{ error }}</p>
+        {% endif %}
+
+        <table class="signup-table">
+            <tr>
+                <td colspan="2" class="form-subtitle">Enter your details</td>
+            </tr>
+            <tr>
+                <td>Email</td>
+                <td><input class="signup-input" type="email" name="customer_email" form="customerLogin" required></td>
+            </tr>
+            <tr>
+                <td>Password</td>
+                <td><input class="signup-input" type="password" name="customer_password" form="customerLogin" required>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2" class="buttons-cell">
+                    <form id="customerLogin" action="{{ url_for('login_customer') }}" method="post"></form>
+                    <input type="submit" value="Login" class="btn" form="customerLogin">
+                    <a href="{{ url_for('home_page') }}" class="btn btn-secondary">Home</a>
+                    <br><br>
+                    <a href="{{ url_for('login_manager') }}" style="font-size: 0.9em;">Are you a Manager? Login here</a>
+                </td>
+            </tr>
+        </table>
+    </div>
+</body>
+
+</html>
