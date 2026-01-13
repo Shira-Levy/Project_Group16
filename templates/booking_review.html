@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Review Booking - FLYTAU</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+
+<div class="container wide">
+  <div class="welcome">
+    <h2>Review <span>Booking</span></h2>
+    <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="Logo">
+  </div>
+
+  {% if error %}
+    <div class="error-box">
+      <p class="error-message">{{ error }}</p>
+    </div>
+    <div class="action-box" style="margin-top:18px;">
+      <a class="btn main-btn" href="{{ url_for('search') }}">Back to Search</a>
+    </div>
+  {% else %}
+
+  <div class="table-card" style="margin-top:10px;">
+    <div style="padding:16px;">
+      <p><b>Flight ID:</b> {{ flight_id }}</p>
+      <p><b>Total tickets:</b> {{ num_tickets }}</p>
+
+      <hr style="margin:14px 0;">
+
+      <p><b>Regular / Economy:</b> {{ regular_count }} × {{ "%.2f"|format(regular_price) }} = <b>{{ "%.2f"|format(regular_total) }}</b></p>
+      <p><b>Business:</b> {{ business_count }} × {{ "%.2f"|format(business_price) }} = <b>{{ "%.2f"|format(business_total) }}</b></p>
+
+      <hr style="margin:14px 0;">
+
+      <p style="font-size:18px;"><b>Grand Total:</b> {{ "%.2f"|format(grand_total) }}</p>
+      <p class="muted" style="margin-top:6px;">Cancellation fee will be 5% of the booking total.</p>
+    </div>
+  </div>
+
+  <form action="{{ url_for('confirm_booking') }}" method="post">
+    <input type="hidden" name="flight_id" value="{{ flight_id }}">
+    <input type="hidden" name="num_tickets" value="{{ num_tickets }}">
+    <input type="hidden" name="selected_joined" value="{{ selected_joined }}">
+
+    <div class="action-box" style="margin-top:18px;">
+      <button class="btn main-btn" type="submit">Confirm & Pay</button>
+      <a class="btn main-btn" href="{{ url_for('choose_seats', flight_id=flight_id, num_tickets=num_tickets) }}">Back</a>
+    </div>
+  </form>
+
+  {% endif %}
+</div>
+
+</body>
+</html>

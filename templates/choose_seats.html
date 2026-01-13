@@ -13,12 +13,11 @@
     <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="Logo">
   </div>
 
-      {% if not error %}
-  <p style="text-align:center; margin-bottom:14px;">
-    Select exactly <b>{{ num_tickets }}</b> seat(s)
-  </p>
-    {% endif %}
-
+  {% if not error %}
+    <p style="text-align:center; margin-bottom:14px;">
+      Select exactly <b>{{ num_tickets }}</b> seat(s)
+    </p>
+  {% endif %}
 
   <div class="error-box">
     {% if error %}
@@ -26,7 +25,8 @@
     {% endif %}
   </div>
 
-  <form action="{{ url_for('book_selected_seats') }}" method="post">
+  <!-- ✅ IMPORTANT: goes to review step, not DB insert -->
+  <form action="{{ url_for('booking_review_page') }}" method="post">
     <input type="hidden" name="flight_id" value="{{ flight_id }}">
     <input type="hidden" name="num_tickets" value="{{ num_tickets }}">
 
@@ -36,6 +36,7 @@
           <tr>
             <th>Seat</th>
             <th>Class</th>
+            <th>Price</th>
             <th style="text-align:right;">Select</th>
           </tr>
         </thead>
@@ -44,6 +45,7 @@
             <tr>
               <td>{{ s.col }}{{ s.row }}</td>
               <td>{{ s.class }}</td>
+              <td>{{ "%.2f"|format(s.price) }}</td>
               <td style="text-align:right;">
                 <input type="checkbox" name="seats" value="{{ s.value }}" class="seat-check">
               </td>
@@ -54,9 +56,8 @@
     </div>
 
     <div class="action-box" style="margin-top:18px;">
-      <button class="btn main-btn" type="submit">Confirm Seats</button>
+      <button class="btn main-btn" type="submit">Continue</button>
       <a class="btn main-btn" href="{{ url_for('search') }}">Back</a>
-
     </div>
   </form>
 </div>
@@ -67,9 +68,7 @@
 
   function enforceLimit() {
     const selected = checks.filter(c => c.checked).length;
-    checks.forEach(c => {
-      if (!c.checked) c.disabled = selected >= maxSeats;
-    });
+    checks.forEach(c => { if (!c.checked) c.disabled = selected >= maxSeats; });
   }
 
   checks.forEach(c => c.addEventListener('change', enforceLimit));
