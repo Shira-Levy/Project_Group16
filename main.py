@@ -446,16 +446,12 @@ def guest_login_post():
 
     # DB: Ensure Client + Guest exist
     with db_curr() as cursor:
-        # Insert into Client if not exists (assuming structure ok, minimal fields)
-        # We only have email. We might need other fields if Client requires them. 
-        # Checking schema: Client constraints? Assuming minimal insert works or we dummy fill.
-        # But wait, Registered extends Client. Guest extends Client.
-        # If Client requires First/Last name, we might fail.
-        # Let's hope Client just needs Email_ID. 
-        # If not, we might need a fuller form.
-        # SQL Dump showed Registered has First/Last. Client schema is unknown but usually parent has shared fields.
-        # If Client has First/Last, we need to ask for them.
-        # I'll try simple insert first.
+        # Check if email belongs to a Registered user
+        cursor.execute("SELECT 1 FROM Registered WHERE Email_R_ID = %s LIMIT 1", (email,))
+        if cursor.fetchone():
+            return render_template('guest_login.html', 
+                                   error="Registered users cannot book as guests.")
+
         try:
             cursor.execute("INSERT IGNORE INTO Client (Email_ID) VALUES (%s)", (email,))
             cursor.execute("INSERT IGNORE INTO Guest (Email_G_ID) VALUES (%s)", (email,))
@@ -634,6 +630,55 @@ def my_bookings():
     past.sort(key=lambda x: (x["Date_of_flight"], x["Time_of_flight"]), reverse=True)  # newest past first
 
     return render_template("my_booking.html", upcoming=upcoming, past=past)
+
+
+@app.route('/find-booking', methods=['GET', 'POST'])
+def find_booking():
+    if request.method == 'GET':
+        return render_template('find_booking.html')
+
+    email = request.form.get("email")
+    booking_id = request.form.get("booking_id")
+
+    if not email or not booking_id:
+        return render_template('find_booking.html', error="Please enter both email and booking ID.")
+
+    query = """
+        SELECT
+            b.B_ID,
+            b.Status,
+            b.booking_date,
+            b.booking_time,
+            COUNT(t.Ticket_ID) AS tickets_count,
+            MIN(t.F_ID) AS any_flight_id,
+            MIN(f.Date_of_flight) AS flight_date,
+            MIN(f.Time_of_flight) AS flight_time
+        FROM Booking b
+        JOIN Flight_Ticket t ON t.B_ID = b.B_ID
+        JOIN Flight f ON f.F_ID = t.F_ID
+        WHERE b.Client_Email = %s AND b.B_ID = %s
+        GROUP BY b.B_ID, b.Status, b.booking_date, b.booking_time
+    """
+
+    with db_curr() as cursor:
+        cursor.execute(query, (email, booking_id))
+        r = cursor.fetchone()
+
+    if not r:
+        return render_template('find_booking.html', error="Booking not found matching these details.")
+
+    booking = {
+        "B_ID": r[0],
+        "Status": r[1],
+        "booking_date": r[2],
+        "booking_time": r[3],
+        "tickets_count": r[4],
+        "F_ID": r[5],
+        "Date_of_flight": r[6],
+        "Time_of_flight": r[7],
+    }
+
+    return render_template("view_booking_single.html", booking=booking)
 
 
 @app.route("/cancel-booking/<int:booking_id>", methods=["POST"])
@@ -1155,22 +1200,26 @@ def manager_reports():
 
     # Revenue by plane size/manufacturer/class using ticket prices from Flight
     q_revenue_by_airplane_class = """
-    SELECT 
+    SELECT
+        a.A_ID,
         a.Size AS Airplane_Size,
         a.Manufacturer,
-        ft.Seat_Class_Type AS Class_Type,
-        SUM(
-          CASE 
-            WHEN LOWER(ft.Seat_Class_Type) = 'business' THEN f.business_ticket_price
-            ELSE f.regular_ticket_price
-          END
-        ) AS Total_Revenue
+        c.Type AS Class_Type,
+        COALESCE(SUM(b.Price), 0) AS Total_Revenue
     FROM Airplane a
-    JOIN Flight f ON a.A_ID = f.A_ID
-    JOIN Flight_Ticket ft ON f.F_ID = ft.F_ID
-    WHERE ft.Status <> 'Cancelled'
-    GROUP BY a.Size, a.Manufacturer, ft.Seat_Class_Type
-    ORDER BY a.Size, a.Manufacturer, ft.Seat_Class_Type;
+    LEFT JOIN Class c
+           ON c.A_ID = a.A_ID
+    LEFT JOIN Flight f
+           ON f.A_ID = a.A_ID
+    LEFT JOIN Flight_Ticket ft
+           ON ft.F_ID = f.F_ID
+          AND ft.Seat_Class_Type = c.Type
+    LEFT JOIN Booking b
+           ON b.B_ID = ft.B_ID
+    GROUP BY
+        a.A_ID, a.Size, a.Manufacturer, c.Type
+    ORDER BY
+        a.A_ID, c.Type;
     """
 
     q_employee_hours = """
@@ -1267,7 +1316,7 @@ def manager_reports():
 
     # --- Shape data for template ---
     revenue = [
-        {"Airplane_Size": r[0], "Manufacturer": r[1], "Class_Type": r[2], "Total_Revenue": float(r[3] or 0)}
+        {"Airplane_Size": r[1], "Manufacturer": r[2], "Class_Type": r[3], "Total_Revenue": float(r[4] or 0)}
         for r in revenue_rows
     ]
 
@@ -1354,6 +1403,70 @@ def booking_review_page():
         raw_seats=seats,
         num_tickets=len(seats)
     )
+
+
+@app.route('/manager/add-staff', methods=['GET', 'POST'])
+def manager_add_staff():
+    if session.get("role") != "manager":
+        return redirect(url_for("login_manager"))
+
+    if request.method == 'GET':
+        return render_template('manager_add_staff.html')
+
+    # POST
+    first_name = request.form.get("first_name")
+    last_name = request.form.get("last_name")
+    phone = request.form.get("phone")
+    city = request.form.get("city")
+    street = request.form.get("street")
+    house_num = request.form.get("house_number")
+    start_date = request.form.get("start_date")
+    e_id = request.form.get("e_id")
+    
+    role = request.form.get("role")
+    training_ok = "Yes" if request.form.get("long_flights_training") else "No"
+
+    if not all([e_id, first_name, last_name, phone, city, street, house_num, start_date, role]):
+        return render_template('manager_add_staff.html', error="All fields are required.")
+
+    try:
+        with db_curr() as cursor:
+            # 1. Check if ID exists (Optional, but friendly)
+            cursor.execute("SELECT 1 FROM Employee WHERE E_ID = %s", (e_id,))
+            if cursor.fetchone():
+                 return render_template('manager_add_staff.html', error=f"Employee ID {e_id} already exists.")
+
+            # 2. Insert into Employee
+            # Note: DB column is 'HoushNumber' based on user image.
+            cursor.execute("""
+                INSERT INTO Employee 
+                (E_ID, PhoneNumber, StartDateOfEmployment, FirstName, LastName, City, Street, HoushNumber)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (e_id, phone, start_date, first_name, last_name, city, street, house_num))
+
+            # 3. Insert into Role Table
+            if role == "pilot":
+                cursor.execute("""
+                    INSERT INTO Pilot (E_ID, Training_for_long_flights)
+                    VALUES (%s, %s)
+                """, (e_id, training_ok))
+            elif role == "attendant":
+                 # Table name likely flight_attendant or Flight_Attendant (case insensitive in Windows often, but best to match)
+                 cursor.execute("""
+                    INSERT INTO flight_attendant (E_ID, Training_for_long_flights)
+                    VALUES (%s, %s)
+                """, (e_id, training_ok))
+            
+            # Commit handled by context manager if strictly configured, 
+            # but usually db_curr() yields cursor and connection commit might be needed manually if not auto-commit.
+            # Assuming db_curr commits on exit or connection is autocommit. 
+            # Previous usages showed commit() calls? Let's check.
+            # No, context manager usually handles it.
+            
+        return render_template('manager_add_staff.html', success=f"Staff member {first_name} {last_name} added successfully as {role.title()}!")
+
+    except mysql.connector.Error as err:
+        return render_template('manager_add_staff.html', error=f"Database error: {err}")
 
 
 if __name__ == "__main__":

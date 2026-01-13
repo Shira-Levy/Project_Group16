@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Booking Details - FLYTAU</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+    <div class="container">
+        <div class="welcome">
+            <h2>Booking Details</h2>
+            <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo">
+        </div>
+
+        <div class="action-box">
+            <a href="{{ url_for('home_page') }}" class="btn secondary-btn">Home</a>
+            <a href="{{ url_for('find_booking') }}" class="btn main-btn">Find Another</a>
+        </div>
+
+        <div class="results-wrapper">
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>Booking ID</th>
+                        <th>Status</th>
+                        <th>Booked At</th>
+                        <th>Flight ID</th>
+                        <th>Flight Date</th>
+                        <th>Flight Time</th>
+                        <th>Tickets</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="mono">{{ booking.B_ID }}</td>
+                        <!-- STATUS COLOR MAPPING -->
+                        <td>
+                            {% set s = (booking.Status or 'Unknown')|lower %}
+                            {% if s == 'confirmed' %}
+                            <span class="pill pill-active">{{ booking.Status }}</span>
+                            {% elif s == 'cancelled' %}
+                            <span class="pill pill-cancelled">{{ booking.Status }}</span>
+                            {% elif s == 'scheduled' %}
+                            <span class="pill pill-scheduled">{{ booking.Status }}</span>
+                            {% else %}
+                            <span class="pill pill-scheduled">{{ booking.Status or 'Unknown' }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="mono">{{ booking.booking_date }} {{ booking.booking_time }}</td>
+                        <td class="mono">{{ booking.F_ID }}</td>
+                        <td class="mono">{{ booking.Date_of_flight }}</td>
+                        <td class="mono">{{ booking.Time_of_flight }}</td>
+                        <td class="mono">{{ booking.tickets_count }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+
+</html>

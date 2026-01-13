@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -11,62 +12,42 @@
   <div class="container wide">
 
     <!-- ✅ FORCED HEADER (no dependency on .page-header CSS) -->
-    <div style="margin: 10px 0 18px;">
-
-      <!-- Title first -->
-      <h1 style="text-align:center; margin: 0 0 6px;">
-        Flight Management
-      </h1>
-      <p style="text-align:center; opacity: 0.75; margin: 0 0 14px;">
-        View, filter, cancel flights and review assigned crew
-      </p>
-
-      <!-- Buttons row -->
-      <div style="
-        display:flex;
-        justify-content:center;
-        gap:12px;
-        flex-wrap:wrap;
-      ">
+    <!-- Header using CSS classes -->
+    <div class="page-header">
+      <div class="left-actions">
         <a class="btn secondary-btn" href="{{ url_for('manager') }}">← Manager Home</a>
-        <a class="btn secondary-btn" href="{{ url_for('home_page') }}">🏠 Website Home</a>
+      </div>
+
+      <div class="title-wrap">
+        <h1 class="page-title">Flight Management</h1>
+        <p class="page-subtitle">View, filter, cancel flights and review assigned crew</p>
+      </div>
+
+      <div class="right-actions">
         <a class="btn main-btn" href="{{ url_for('manager_add_flight') }}">+ Add Flight</a>
+        <a class="btn secondary-btn" href="{{ url_for('home_page') }}">🏠 Home</a>
       </div>
     </div>
 
     {% if error %}
-      <p style="color:#b00020; text-align:center; margin: 10px 0;">
-        <b>{{ error }}</b>
-      </p>
+    <p class="error-text"><b>{{ error }}</b></p>
     {% endif %}
 
     <!-- Filter -->
-    <form method="get" style="
-      display:flex;
-      gap:10px;
-      align-items:center;
-      justify-content:center;
-      flex-wrap:wrap;
-      margin: 10px 0 14px;
-    ">
+    <form method="get" class="filter-bar">
       <label><b>Status filter:</b></label>
-      <select name="status" class="signup-input" style="width:220px;">
+      <select name="status" class="signup-input filter-select">
         {% for opt in ["All","Active","Full","Completed","Cancelled"] %}
-          <option value="{{ opt }}" {% if status_filter==opt %}selected{% endif %}>{{ opt }}</option>
+        <option value="{{ opt }}" {% if status_filter==opt %}selected{% endif %}>{{ opt }}</option>
         {% endfor %}
       </select>
       <button class="btn main-btn btn-small" type="submit">Apply</button>
     </form>
 
     <!-- Table -->
-    <div class="table-card" style="
-      background:#fff;
-      border-radius:14px;
-      padding:10px;
-      box-shadow:0 8px 24px rgba(0,0,0,0.06);
-    ">
-      <div class="table-scroll" style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
-        <table class="results-table" style="width:100%; min-width:920px; border-collapse:collapse;">
+    <div class="table-card">
+      <div class="table-scroll">
+        <table class="results-table">
           <thead>
             <tr>
               <th>F_ID</th>
@@ -96,20 +77,18 @@
 
               <td>
                 <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; align-items:center;">
-                  <a class="btn secondary-btn btn-small"
-                     href="{{ url_for('manager_flight_crew', flight_id=f.F_ID) }}">
+                  <a class="btn secondary-btn btn-small" href="{{ url_for('manager_flight_crew', flight_id=f.F_ID) }}">
                     Flight Crew
                   </a>
 
                   {% if f.computed_status != "Cancelled" %}
-                    <form method="post"
-                          action="{{ url_for('manager_cancel_flight', flight_id=f.F_ID) }}"
-                          onsubmit="return confirm('Cancel flight {{f.F_ID}}? This will refund bookings (Price=0).');"
-                          style="margin:0;">
-                      <button class="btn admin-btn btn-small" type="submit">Cancel</button>
-                    </form>
+                  <form method="post" action="{{ url_for('manager_cancel_flight', flight_id=f.F_ID) }}"
+                    onsubmit="return confirm('Cancel flight {{f.F_ID}}? This will refund bookings (Price=0).');"
+                    style="margin:0;">
+                    <button class="btn admin-btn btn-small" type="submit">Cancel</button>
+                  </form>
                   {% else %}
-                    <span style="opacity:0.65;">—</span>
+                  <span style="opacity:0.65;">—</span>
                   {% endif %}
                 </div>
               </td>
@@ -122,4 +101,5 @@
 
   </div>
 </body>
+
 </html>

@@ -54,11 +54,32 @@
       <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo">
     </div>
 
-    <div class="action-box">
-      <a href="{{ url_for('login_customer') }}" class="btn main-btn">Customer Login</a>
-      <a href="{{ url_for('login_manager') }}" class="btn secondary-btn"
-        style="background: #2d3748; color: #fff;">Manager Login</a>
-      <a href="{{ url_for('signup') }}" class="btn secondary-btn">Sign Up</a>
+    <div class="action-grid">
+      <a href="{{ url_for('search') }}" class="btn tile-btn btn-guest">
+        <span class="icon">✈️</span>
+        <span>Search Flights</span>
+        <span class="sub">Guest Access</span>
+      </a>
+      <a href="{{ url_for('find_booking') }}" class="btn tile-btn btn-find">
+        <span class="icon">🔍</span>
+        <span>Find Booking</span>
+        <span class="sub">Check Status</span>
+      </a>
+      <a href="{{ url_for('login_customer') }}" class="btn tile-btn btn-login">
+        <span class="icon">👤</span>
+        <span>Customer Login</span>
+        <span class="sub">Registered Users</span>
+      </a>
+      <a href="{{ url_for('signup') }}" class="btn tile-btn btn-signup">
+        <span class="icon">🖊️</span>
+        <span>Sign Up</span>
+        <span class="sub">Create Account</span>
+      </a>
+      <a href="{{ url_for('login_manager') }}" class="btn tile-btn btn-manager">
+        <span class="icon">🔒</span>
+        <span>Manager Login</span>
+        <span class="sub">Staff Only</span>
+      </a>
     </div>
 
     {% endif %}

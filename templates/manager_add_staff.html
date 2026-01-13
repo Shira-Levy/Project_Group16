@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Add Staff Member - FLYTAU</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+    <div class="container signup-container">
+        <div class="welcome">
+            <h2>Add Staff Member</h2>
+            <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU Logo">
+        </div>
+
+        {% if error %}
+        <p style="color:red; text-align:center;">{{ error }}</p>
+        {% endif %}
+
+        {% if success %}
+        <p style="color:green; text-align:center;">{{ success }}</p>
+        {% endif %}
+
+        <form action="{{ url_for('manager_add_staff') }}" method="post">
+            <table class="signup-table">
+                <tr>
+                    <td colspan="2" class="form-subtitle">Employee Details</td>
+                </tr>
+                <tr>
+                    <td>Employee ID (ID Card)</td>
+                    <td><input class="signup-input" type="number" name="e_id" required></td>
+                </tr>
+                <tr>
+                    <td>First Name</td>
+                    <td><input class="signup-input" type="text" name="first_name" required></td>
+                </tr>
+                <tr>
+                    <td>Last Name</td>
+                    <td><input class="signup-input" type="text" name="last_name" required></td>
+                </tr>
+                <tr>
+                    <td>Phone Number</td>
+                    <td><input class="signup-input" type="text" name="phone" required></td>
+                </tr>
+                <tr>
+                    <td>City</td>
+                    <td><input class="signup-input" type="text" name="city" required></td>
+                </tr>
+                <tr>
+                    <td>Street</td>
+                    <td><input class="signup-input" type="text" name="street" required></td>
+                </tr>
+                <tr>
+                    <td>House Number</td>
+                    <td><input class="signup-input" type="text" name="house_number" required></td>
+                </tr>
+                <tr>
+                    <td>Start Date</td>
+                    <td><input class="signup-input" type="date" name="start_date" required></td>
+                </tr>
+
+                <tr>
+                    <td colspan="2" class="form-subtitle" style="padding-top:15px;">Role Assignment</td>
+                </tr>
+                <tr>
+                    <td>Role</td>
+                    <td>
+                        <select class="signup-input" name="role" required>
+                            <option value="pilot">Pilot</option>
+                            <option value="attendant">Flight Attendant</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Training</td>
+                    <td>
+                        <label style="display:flex; align-items:center; gap:8px;">
+                            <input type="checkbox" name="long_flights_training" value="Yes">
+                            Training for Long Flights
+                        </label>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td colspan="2" class="buttons-cell">
+                        <input type="submit" value="Add Staff Member" class="btn main-btn">
+                        <br>
+                        <a href="{{ url_for('manager') }}" class="btn secondary-btn">Back to Dashboard</a>
+                    </td>
+                </tr>
+            </table>
+        </form>
+    </div>
+</body>
+
+</html>

@@ -1,87 +1,83 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>Search Flights - FLYTAU</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
+
 <body>
 
-<div class="container">
-  <div class="welcome">
-    <h2>Search <span>Flights</span></h2>
-    <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="Logo">
+  <div class="container signup-container">
+    <div class="welcome">
+      <h2>Search <span>Flights</span></h2>
+      <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="Logo">
+    </div>
+
+    {% if error %}
+    <p style="color:red; text-align:center;">{{ error }}</p>
+    {% endif %}
+
+    <form action="{{ url_for('search') }}" method="post">
+      <table class="signup-table">
+
+        <tr>
+          <td>From</td>
+          <td>
+            <select class="signup-input" name="source" required>
+              <option value="" disabled selected>Select source airport</option>
+              {% for a in airports %}
+              <option value="{{ a }}">{{ a }}</option>
+              {% endfor %}
+            </select>
+          </td>
+        </tr>
+
+        <tr>
+          <td>To</td>
+          <td>
+            <select class="signup-input" name="dest" required>
+              <option value="" disabled selected>Select destination airport</option>
+              {% for a in airports %}
+              <option value="{{ a }}">{{ a }}</option>
+              {% endfor %}
+            </select>
+          </td>
+        </tr>
+
+        <tr>
+          <td>Date</td>
+          <td>
+            <input class="signup-input" type="date" name="date">
+            <div style="font-size:12px; color:#777; margin-top:4px;">
+              (Optional – leave empty to see all available flights)
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td>Number of tickets</td>
+          <td>
+            <input class="signup-input" type="number" name="num_tickets" min="1" max="10" value="{{ num_tickets or 1 }}"
+              required>
+            <div style="font-size:12px; color:#777; margin-top:4px;">
+              Choose how many seats you want to book.
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td colspan="2" class="buttons-cell">
+            <button class="btn main-btn" type="submit">Search</button>
+            <a class="btn secondary-btn" href="{{ url_for('home_page') }}">Back</a>
+          </td>
+        </tr>
+
+      </table>
+    </form>
   </div>
 
-  {% if error %}
-    <p style="color:red; text-align:center;">{{ error }}</p>
-  {% endif %}
-
-  <form action="{{ url_for('search') }}" method="post">
-    <table class="signup-table">
-
-      <tr>
-        <td>From</td>
-        <td>
-          <select class="signup-input" name="source" required>
-            <option value="" disabled selected>Select source airport</option>
-            {% for a in airports %}
-              <option value="{{ a }}">{{ a }}</option>
-            {% endfor %}
-          </select>
-        </td>
-      </tr>
-
-      <tr>
-        <td>To</td>
-        <td>
-          <select class="signup-input" name="dest" required>
-            <option value="" disabled selected>Select destination airport</option>
-            {% for a in airports %}
-              <option value="{{ a }}">{{ a }}</option>
-            {% endfor %}
-          </select>
-        </td>
-      </tr>
-
-      <tr>
-        <td>Date</td>
-        <td>
-          <input class="signup-input" type="date" name="date">
-          <div style="font-size:12px; color:#777; margin-top:4px;">
-            (Optional – leave empty to see all available flights)
-          </div>
-        </td>
-      </tr>
-
-      <tr>
-        <td>Number of tickets</td>
-        <td>
-          <input
-            class="signup-input"
-            type="number"
-            name="num_tickets"
-            min="1"
-            max="10"
-            value="{{ num_tickets or 1 }}"
-            required
-          >
-          <div style="font-size:12px; color:#777; margin-top:4px;">
-            Choose how many seats you want to book.
-          </div>
-        </td>
-      </tr>
-
-      <tr>
-        <td colspan="2" class="buttons-cell">
-          <button class="btn main-btn" type="submit">Search</button>
-          <a class="btn secondary-btn" href="{{ url_for('home_page') }}">Back</a>
-        </td>
-      </tr>
-
-    </table>
-  </form>
-</div>
-
 </body>
+
 </html>

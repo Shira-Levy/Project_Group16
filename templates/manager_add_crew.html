@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>Select Crew</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
+
 <body>
-  <div class="container">
+  <div class="container signup-container">
     <a class="btn secondary-btn" href="{{ url_for('manager_add_flight') }}">← Back</a>
 
     <h2 style="margin-top:10px;">Select Crew</h2>
@@ -22,7 +24,7 @@
     </p>
 
     {% if error %}
-      <p style="color:#b00020;"><b>{{ error }}</b></p>
+    <p style="color:#b00020;"><b>{{ error }}</b></p>
     {% endif %}
 
     <form method="post" action="{{ url_for('manager_add_flight') }}">
@@ -35,14 +37,14 @@
       <label><b>Choose Pilots (select {{ req_pilots }})</b></label>
       <select name="pilots" class="signup-input" multiple required size="8">
         {% for p in available_pilots %}
-          <option value="{{ p[0] }}">{{ p[0] }} — {{ p[1] }} {{ p[2] }}</option>
+        <option value="{{ p[0] }}">{{ p[0] }} — {{ p[1] }} {{ p[2] }}</option>
         {% endfor %}
       </select>
 
       <label><b>Choose Attendants (select {{ req_attendants }})</b></label>
       <select name="attendants" class="signup-input" multiple required size="10">
         {% for a in available_attendants %}
-          <option value="{{ a[0] }}">{{ a[0] }} — {{ a[1] }} {{ a[2] }}</option>
+        <option value="{{ a[0] }}">{{ a[0] }} — {{ a[1] }} {{ a[2] }}</option>
         {% endfor %}
       </select>
 
@@ -52,4 +54,5 @@
     </form>
   </div>
 </body>
+
 </html>

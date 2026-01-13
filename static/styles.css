@@ -1,8 +1,8 @@
 body {
-  font-family: Verdana, sans-serif;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   margin: 0;
   padding: 0;
-  background: #d4e8ff;
+  background: linear-gradient(135deg, #e0eafe 0%, #cce0ff 100%);
   position: relative;
   /* ensure positioning context */
   min-height: 100vh;
@@ -33,10 +33,11 @@ body.manager-flights-page .container {
 .container {
   background: white;
   padding: 40px 50px;
-  border-radius: 14px;
+  border-radius: 20px;
   text-align: center;
-  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.15);
-  width: 420px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+  width: 90%;
+  max-width: 900px;
 }
 
 .signup-container {
@@ -724,4 +725,92 @@ input.btn {
   .manager-flights-page .right-actions {
     justify-content: center;
   }
+}
+
+/* ===========================
+   NEW MODERN UI STYLES
+   =========================== */
+
+/* Grid Layout for Home Buttons */
+.action-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 30px;
+}
+
+/* Tile Button Base */
+.tile-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 25px 15px;
+  background: #fff;
+  color: white;
+  text-decoration: none;
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  width: 180px !important;
+  /* Fixed base width */
+  flex: 1 1 180px;
+  max-width: 200px;
+  /* Prevent excessive stretching */
+  margin: 0 !important;
+  /* Override .btn margin */
+  height: auto;
+  min-height: 140px;
+}
+
+.tile-btn:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+}
+
+.tile-btn .icon {
+  font-size: 36px;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.tile-btn span {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.tile-btn .sub {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.9;
+  margin-top: 6px;
+}
+
+/* Specific Button Gradients */
+.btn-guest {
+  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+  background: linear-gradient(135deg, #FF512F 0%, #DD2476 100%);
+  /* Vibrant Pink/Red */
+}
+
+.btn-find {
+  background: linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%);
+  /* Purple */
+}
+
+.btn-login {
+  background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+  /* Blue */
+}
+
+.btn-manager {
+  background: linear-gradient(135deg, #434343 0%, #000000 100%);
+  /* Dark/Black */
+}
+
+.btn-signup {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  /* Green */
 }
