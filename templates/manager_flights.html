@@ -19,8 +19,7 @@
       </div>
 
       <div class="title-wrap">
-        <img src="{{ url_for('static', filename='flytau_logo.png') }}" alt="FLYTAU"
-          style="height: 60px; margin-bottom: 10px;">
+        <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU Logo">
         <h1 class="page-title">Flight Management</h1>
         <p class="page-subtitle">View, filter, cancel flights and review assigned crew</p>
       </div>
@@ -30,19 +29,6 @@
         <a class="btn secondary-btn" href="{{ url_for('home_page') }}">🏠 Home</a>
       </div>
     </div>
-
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    {% for category, message in messages %}
-    {% if category == 'error' %}
-    <p class="error-text"><b>{{ message }}</b></p>
-    {% else %}
-    <p style="color: green; text-align: center;"><b>{{ message }}</b></p>
-    {% endif %}
-    {% endfor %}
-    {% endif %}
-    {% endwith %}
 
     {% if error %}
     <p class="error-text"><b>{{ error }}</b></p>
@@ -96,7 +82,7 @@
                     Flight Crew
                   </a>
 
-                  {% if f.computed_status not in ["Cancelled", "Completed"] %}
+                  {% if f.computed_status != "Cancelled" %}
                   <form method="post" action="{{ url_for('manager_cancel_flight', flight_id=f.F_ID) }}"
                     onsubmit="return confirm('Cancel flight {{f.F_ID}}? This will refund bookings (Price=0).');"
                     style="margin:0;">

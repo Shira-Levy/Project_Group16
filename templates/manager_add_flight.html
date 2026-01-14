@@ -16,9 +16,8 @@
         href="{{ url_for('home_page') }}">🏠 Home</a>
     </div>
 
-    <div style="text-align:center; margin-bottom:10px;">
-      <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU">
-    </div>
+    <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU Logo"
+      style="display:block; margin: 10px auto;">
     <h2 style="margin-top:10px;">Add New Flight</h2>
 
     {% if error %}

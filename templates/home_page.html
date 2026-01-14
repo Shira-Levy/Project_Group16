@@ -16,8 +16,6 @@
     <!-- USER HEADER -->
     <div class="user-bar">
       <div class="user-left">
-        <img src="{{ url_for('static', filename='flytau_logo.png') }}" alt="FLYTAU"
-          style="height: 40px; width: auto; margin-right: 10px;">
         <div class="user-avatar">
           {{ session.get("first_name")[0] }}
         </div>
@@ -45,6 +43,9 @@
       <a href="{{ url_for('my_bookings') }}" class="btn secondary-btn">My Bookings</a>
       {% elif session.get("role") == "manager" %}
       <a href="{{ url_for('manager') }}" class="btn admin-btn">Admin Panel</a>
+      {% elif session.get("role") == "guest" %}
+      <a href="{{ url_for('search') }}" class="btn main-btn">Book Flight</a>
+      <a href="{{ url_for('my_bookings') }}" class="btn secondary-btn">My Bookings</a>
       {% endif %}
     </div>
 

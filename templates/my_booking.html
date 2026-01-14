@@ -13,8 +13,8 @@
     <!-- USER HEADER -->
     <div class="user-bar">
       <div class="user-left">
-        <img src="{{ url_for('static', filename='flytau_logo.png') }}" alt="FLYTAU"
-          style="height: 40px; width: auto; margin-right: 10px;">
+        <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU Logo"
+          style="margin-right: 15px;">
         <div class="user-avatar">
           {{ session.get("first_name")[0] }}
         </div>
@@ -47,12 +47,12 @@
     {% endif %}
     {% endwith %}
 
-    <h2 class="form-subtitle">My Bookings</h2>
-
-    <div class="action-box">
+    <div class="action-box" style="margin-bottom: 20px;">
       <a href="{{ url_for('home_page') }}" class="btn secondary-btn">Home</a>
       <a href="{{ url_for('search') }}" class="btn main-btn">Search Flights</a>
     </div>
+
+    <h2 class="form-subtitle">My Bookings</h2>
 
     <!-- ===== UPCOMING BOOKINGS ===== -->
     <h2 class="form-subtitle" style="margin-top: 22px;">Upcoming Bookings</h2>
@@ -112,7 +112,7 @@
 
             <td class="actions-col">
               <form method="POST" action="{{ url_for('cancel_booking', booking_id=b.B_ID) }}"
-                onsubmit="return confirm('Are you sure you want to cancel this booking? This will release the seats.');">
+                onsubmit="return confirm('Note: Cancelling a booking involves a fee of 5% of the transaction amount.\nAre you sure you want to proceed?');">
                 <button type="submit" class="btn btn-small secondary-btn">Cancel</button>
               </form>
             </td>
