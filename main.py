@@ -734,8 +734,8 @@ def cancel_booking(booking_id):
         # 2) Delete tickets (this releases seats)
         cursor.execute("DELETE FROM Flight_Ticket WHERE B_ID = %s", (booking_id,))
 
-        # 3) Delete booking itself
-        cursor.execute("DELETE FROM Booking WHERE B_ID = %s", (booking_id,))
+        # 3) Update booking status to Cancelled (Soft Delete)
+        cursor.execute("UPDATE Booking SET Status = 'Cancelled' WHERE B_ID = %s", (booking_id,))
 
         mydb.commit()
         return redirect(url_for("my_bookings"))
@@ -1123,7 +1123,8 @@ def manager_cancel_flight(flight_id):
 
         flight_dt = datetime.combine(flight_date, flight_time)
         if flight_dt < datetime.now() + timedelta(hours=72):
-            return abort(400, description="Managers can cancel only up to 72 hours before the flight.")
+            flash("You cannot cancel a flight within 72 hours of departure.", "error")
+            return redirect(url_for("manager_flights"))
 
         if flight_status.lower() == "cancelled":
             return redirect(url_for("manager_flights"))
@@ -1134,10 +1135,10 @@ def manager_cancel_flight(flight_id):
         # 2) cancel tickets (optional but logical)
         cursor.execute("UPDATE Flight_Ticket SET Status='Cancelled' WHERE F_ID=%s", (flight_id,))
 
-        # 3) refund bookings => Price = 0 AND Status = Cancelled
+        # 3) refund bookings => Price = 0 AND Status = 'Manager Cancelled'
         cursor.execute("""
             UPDATE Booking
-            SET Price = 0, Status = 'Cancelled'
+            SET Price = 0, Status = 'Manager Cancelled'
             WHERE B_ID IN (
                 SELECT DISTINCT B_ID
                 FROM Flight_Ticket
@@ -1183,46 +1184,107 @@ def manager_flight_crew(flight_id):
 @app.route("/manager/reports")
 @login_required(role="manager")
 def manager_reports():
-    # --- Queries (updated / safer) ---
-    q_avg_occupancy = """
+    # --- Get Filters from Query String ---
+    f_year = request.args.get('filter_year', type=int)
+    f_month = request.args.get('filter_month', type=int)
+    f_aid = request.args.get('filter_aid', type=int)
+
+    # --- Fetch Available Filter Options (for Dropdowns) ---
+    avail_years = []
+    avail_months = []
+    avail_aids = []
+    
+    with db_curr() as cursor:
+        # Years
+        cursor.execute("SELECT DISTINCT YEAR(Date_of_flight) FROM Flight ORDER BY 1 DESC")
+        avail_years = [row[0] for row in cursor.fetchall() if row[0] is not None]
+        
+        # Months
+        cursor.execute("SELECT DISTINCT MONTH(Date_of_flight) FROM Flight ORDER BY 1")
+        avail_months = [row[0] for row in cursor.fetchall() if row[0] is not None]
+        
+        # Airplane IDs (All airplanes)
+        cursor.execute("SELECT A_ID FROM Airplane ORDER BY A_ID")
+        avail_aids = [row[0] for row in cursor.fetchall()]
+
+    # Helper conditions
+    # For Flight table: f.Date_of_flight
+    cond_flights = []
+    params_flights = []
+    if f_year:
+        cond_flights.append("YEAR(f.Date_of_flight) = %s")
+        params_flights.append(f_year)
+    if f_month:
+        cond_flights.append("MONTH(f.Date_of_flight) = %s")
+        params_flights.append(f_month)
+    if f_aid:
+        cond_flights.append("f.A_ID = %s")
+        params_flights.append(f_aid)
+
+    # For Booking table: booking_date (for cancellation rate)
+    cond_booking = []
+    params_booking = []
+    if f_year:
+        cond_booking.append("YEAR(booking_date) = %s")
+        params_booking.append(f_year)
+    if f_month:
+        cond_booking.append("MONTH(booking_date) = %s")
+        params_booking.append(f_month)
+    # Bookings don't have A_ID directly without joining, so we'll skip A_ID filter for pure booking stats
+    # Unless we join Flight_Ticket -> Flight. For "Cancellation Rate", strictly it is about bookings. 
+    # If user filters by A_ID, cancellation rate might not be relevant or needs complex join. 
+    # Let's keep it simple: filter cancellation rate by time only.
+
+    # --- Queries (Dynamic) ---
+
+    # 1. Average Occupancy
+    # Base WHERE for existing logic + filters
+    where_occ = [
+        "(f.Date_of_Arrival < CURRENT_DATE OR (f.Date_of_Arrival = CURRENT_DATE AND f.Time_of_Arrival < CURRENT_TIME))",
+        "f.Status <> 'Cancelled'"
+    ]
+    where_occ.extend(cond_flights)
+    
+    q_avg_occupancy = f"""
     SELECT AVG(Occupancy_Rate) * 100 AS Average_Occupancy_Percentage
     FROM (
         SELECT 
-            f.F_ID,
             1.0 * (SELECT COUNT(*) FROM Flight_Ticket ft WHERE ft.F_ID = f.F_ID) /
             NULLIF((SELECT COUNT(*) FROM Seat s WHERE s.A_ID = f.A_ID), 0) AS Occupancy_Rate
         FROM Flight f
-        WHERE 
-            f.Date_of_Arrival < CURRENT_DATE
-            OR (f.Date_of_Arrival = CURRENT_DATE AND f.Time_of_Arrival < CURRENT_TIME)
+        WHERE {' AND '.join(where_occ)}
     ) AS Flight_Stats;
     """
 
-    # Revenue by plane size/manufacturer/class using ticket prices from Flight
-    q_revenue_by_airplane_class = """
+    # 2. Revenue (Grouped by Size/Manuf/Class)
+    # We filter the FLIGHTS contributing to revenue
+    where_rev = []
+    if cond_flights:
+        where_rev.append(' AND '.join(cond_flights))
+    
+    rev_filter_clause = ("WHERE " + ' AND '.join(where_rev)) if where_rev else ""
+
+    q_revenue_by_airplane_class = f"""
     SELECT
-        a.A_ID,
         a.Size AS Airplane_Size,
         a.Manufacturer,
         c.Type AS Class_Type,
         COALESCE(SUM(b.Price), 0) AS Total_Revenue
     FROM Airplane a
-    LEFT JOIN Class c
-           ON c.A_ID = a.A_ID
-    LEFT JOIN Flight f
-           ON f.A_ID = a.A_ID
-    LEFT JOIN Flight_Ticket ft
-           ON ft.F_ID = f.F_ID
-          AND ft.Seat_Class_Type = c.Type
-    LEFT JOIN Booking b
-           ON b.B_ID = ft.B_ID
-    GROUP BY
-        a.A_ID, a.Size, a.Manufacturer, c.Type
-    ORDER BY
-        a.A_ID, c.Type;
+    LEFT JOIN Class c ON c.A_ID = a.A_ID
+    LEFT JOIN Flight f ON f.A_ID = a.A_ID
+    LEFT JOIN Flight_Ticket ft ON ft.F_ID = f.F_ID AND ft.Seat_Class_Type = c.Type
+    LEFT JOIN Booking b ON b.B_ID = ft.B_ID
+    {rev_filter_clause}
+    GROUP BY a.Size, a.Manufacturer, c.Type
+    ORDER BY a.Size, a.Manufacturer, c.Type;
     """
 
-    q_employee_hours = """
+    # 3. Employee Hours
+    where_emp = ["f.Status <> 'Cancelled'"]
+    where_emp.extend(cond_flights)
+
+    q_employee_hours = f"""
     SELECT 
         e.FirstName, 
         e.LastName,
@@ -1235,26 +1297,40 @@ def manager_reports():
     JOIN Flight_Crew fc ON e.E_ID = fc.E_ID
     JOIN Flight f       ON fc.F_ID = f.F_ID
     JOIN Route r        ON f.R_ID = r.R_ID
-    WHERE f.Status <> 'Cancelled'
+    WHERE {' AND '.join(where_emp)}
     GROUP BY e.E_ID, e.FirstName, e.LastName, Flight_Category
     ORDER BY e.FirstName, e.LastName;
     """
 
-    # Monthly cancellation rate (works only if you store cancelled bookings in Booking.Status)
-    q_cancellation_rate = """
+    # 4. Cancellation Rate
+    # Filter only by date (Booking Date)
+    where_cancel = []
+    if cond_booking:
+        where_cancel.append(' AND '.join(cond_booking))
+    
+    cancel_filter_clause = ("WHERE " + ' AND '.join(where_cancel)) if where_cancel else ""
+
+    q_cancellation_rate = f"""
     SELECT 
-        YEAR(b.booking_date) AS Year,
-        MONTH(b.booking_date) AS Month,
-        COUNT(DISTINCT b.B_ID) AS Total_Bookings,
-        SUM(CASE WHEN LOWER(b.Status) LIKE '%cancel%' THEN 1 ELSE 0 END) AS Customer_Canceled_Bookings,
-        (SUM(CASE WHEN LOWER(b.Status) LIKE '%cancel%' THEN 1 ELSE 0 END) * 100.0) / COUNT(DISTINCT b.B_ID) AS Cancellation_Rate_Percentage
-    FROM Booking b
+        YEAR(booking_date) AS Year,
+        MONTH(booking_date) AS Month,
+        COUNT(B_ID) AS Total_Bookings,
+        SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) AS Customer_Canceled_Bookings,
+        (SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) * 100.0) / COUNT(B_ID) AS Cancellation_Rate_Percentage
+    FROM Booking
+    {cancel_filter_clause}
     GROUP BY Year, Month
     ORDER BY Year ASC, Month ASC;
     """
 
-    # Monthly activity per airplane + dominant route (MySQL 8+)
-    q_monthly_airplane_activity = """
+    # 5. Airplane Activity
+    where_act = []
+    if cond_flights:
+        where_act.append(' AND '.join(cond_flights))
+    
+    act_filter_clause = ("WHERE " + ' AND '.join(where_act)) if where_act else ""
+
+    q_monthly_airplane_activity = f"""
     WITH MonthlyBasicStats AS (
         SELECT 
             A_ID,
@@ -1263,7 +1339,8 @@ def manager_reports():
             SUM(CASE WHEN Status <> 'Cancelled' THEN 1 ELSE 0 END) AS Performed_Flights,
             SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) AS Cancelled_Flights,
             COUNT(DISTINCT CASE WHEN Status <> 'Cancelled' THEN Date_of_flight END) / 30.0 AS Utilization_Rate
-        FROM Flight
+        FROM Flight f
+        {act_filter_clause}
         GROUP BY A_ID, Flight_Year, Flight_Month
     ),
     RouteFrequency AS (
@@ -1297,26 +1374,35 @@ def manager_reports():
     ORDER BY ms.Flight_Year DESC, ms.Flight_Month DESC, ms.A_ID;
     """
 
+    # Execute
     with db_curr() as cursor:
-        cursor.execute(q_avg_occupancy)
+        # Occupancy
+        cursor.execute(q_avg_occupancy, params_flights)
         avg_occ_row = cursor.fetchone()
         avg_occupancy = float(avg_occ_row[0]) if avg_occ_row and avg_occ_row[0] is not None else 0.0
 
-        cursor.execute(q_revenue_by_airplane_class)
+        # Revenue
+        # Note: We need to pass params_flights for the WHERE clause inside the LEFT JOIN logic if needed,
+        # but here we appended to the main WHERE.
+        params_rev = params_flights # Simplification
+        cursor.execute(q_revenue_by_airplane_class, params_rev)
         revenue_rows = cursor.fetchall()
-
-        cursor.execute(q_employee_hours)
+        
+        # Employee
+        cursor.execute(q_employee_hours, params_flights)
         emp_rows = cursor.fetchall()
 
-        cursor.execute(q_cancellation_rate)
+        # Cancellation
+        cursor.execute(q_cancellation_rate, params_booking)
         cancel_rows = cursor.fetchall()
 
-        cursor.execute(q_monthly_airplane_activity)
+        # Activity
+        cursor.execute(q_monthly_airplane_activity, params_flights)
         activity_rows = cursor.fetchall()
 
     # --- Shape data for template ---
     revenue = [
-        {"Airplane_Size": r[1], "Manufacturer": r[2], "Class_Type": r[3], "Total_Revenue": float(r[4] or 0)}
+        {"Airplane_Size": r[0], "Manufacturer": r[1], "Class_Type": r[2], "Total_Revenue": float(r[3] or 0)}
         for r in revenue_rows
     ]
 
@@ -1344,7 +1430,15 @@ def manager_reports():
         revenue=revenue,
         employee_hours=employee_hours,
         cancellation=cancellation,
-        airplane_activity=airplane_activity
+        airplane_activity=airplane_activity,
+        # Pass filters back to template to keep raw values in inputs
+        filter_year=f_year,
+        filter_month=f_month,
+        filter_aid=f_aid,
+        # Pass available options for dropdowns
+        avail_years=avail_years,
+        avail_months=avail_months,
+        avail_aids=avail_aids
     )
 
 @app.route('/booking-review', methods=['POST'])

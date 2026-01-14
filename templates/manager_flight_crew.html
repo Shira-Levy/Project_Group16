@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -28,6 +29,8 @@
 
       <!-- Title -->
       <div style="text-align:center; flex: 1; min-width: 220px;">
+        <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU"
+          style="height:50px; margin-bottom: 6px;">
         <h1 style="margin:0;">Flight Crew</h1>
         <div style="opacity:0.7; font-size:0.95rem; margin-top:4px;">
           Flight {{ flight_id }} — Assigned employees
@@ -53,20 +56,20 @@
 
           <tbody>
             {% if crew and crew|length > 0 %}
-              {% for c in crew %}
-              <tr>
-                <td><b>{{ c.Duty }}</b></td>
-                <td>{{ c.E_ID }}</td>
-                <td>{{ c.FirstName }}</td>
-                <td>{{ c.LastName }}</td>
-              </tr>
-              {% endfor %}
+            {% for c in crew %}
+            <tr>
+              <td><b>{{ c.Duty }}</b></td>
+              <td>{{ c.E_ID }}</td>
+              <td>{{ c.FirstName }}</td>
+              <td>{{ c.LastName }}</td>
+            </tr>
+            {% endfor %}
             {% else %}
-              <tr>
-                <td colspan="4" style="text-align:center; padding:16px; opacity:0.7;">
-                  No crew assigned to this flight.
-                </td>
-              </tr>
+            <tr>
+              <td colspan="4" style="text-align:center; padding:16px; opacity:0.7;">
+                No crew assigned to this flight.
+              </td>
+            </tr>
             {% endif %}
           </tbody>
         </table>
@@ -75,4 +78,5 @@
 
   </div>
 </body>
+
 </html>

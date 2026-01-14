@@ -16,6 +16,8 @@
     <!-- USER HEADER -->
     <div class="user-bar">
       <div class="user-left">
+        <img src="{{ url_for('static', filename='flytau_logo.png') }}" alt="FLYTAU"
+          style="height: 40px; width: auto; margin-right: 10px;">
         <div class="user-avatar">
           {{ session.get("first_name")[0] }}
         </div>

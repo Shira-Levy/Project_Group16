@@ -13,6 +13,9 @@
   <div class="container wide">
 
     <!-- Page Title -->
+    <div style="text-align:center;">
+      <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU">
+    </div>
     <h1 style="text-align:center; margin: 10px 0 6px;">Manager Reports</h1>
     <p style="text-align:center; opacity:0.75; margin: 0 0 14px;">
       Operational insights and KPIs
@@ -23,6 +26,8 @@
       <a class="btn secondary-btn" href="{{ url_for('manager') }}">← Manager Home</a>
       <a class="btn secondary-btn" href="{{ url_for('manager_flights') }}">← Back to Flights</a>
     </div>
+
+
 
     <!-- Report Navigation -->
     <div class="report-nav" style="display:flex; justify-content:center; gap:15px; margin-bottom:25px; flex-wrap:wrap;">
@@ -161,7 +166,52 @@
     <!-- SECTION 4: Airplane Activity -->
     <div id="activity" class="report-section" style="display:none;">
       <div class="table-card" style="padding:10px; margin-bottom:24px;">
-        <h3 style="margin: 8px 8px 12px;">Monthly Airplane Activity + Dominant Route</h3>
+
+        <!-- Filter included here, only visible in this tab -->
+        <h3 style="margin: 8px 8px 12px;">Monthly Airplane Activity</h3>
+        <form method="get" action="{{ url_for('manager_reports') }}"
+          style="display:flex; justify-content:center; align-items:flex-end; gap:15px; flex-wrap:wrap; margin-bottom:15px; background:#f9fafb; padding:10px; border-radius:8px;">
+          <!-- Hidden input to keep user on this tab after reload -->
+          <input type="hidden" name="active_tab" value="activity">
+
+          <div style="text-align:left;">
+            <label style="font-size:13px; font-weight:bold;">Year</label>
+            <select name="filter_year" class="signup-input" style="width:80px; margin:0; height:34px; padding:0 5px;">
+              <option value="">All</option>
+              {% for y in avail_years %}
+              <option value="{{ y }}" {% if filter_year==y %}selected{% endif %}>{{ y }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div style="text-align:left;">
+            <label style="font-size:13px; font-weight:bold;">Month</label>
+            <select name="filter_month" class="signup-input" style="width:60px; margin:0; height:34px; padding:0 5px;">
+              <option value="">All</option>
+              {% for m in avail_months %}
+              <option value="{{ m }}" {% if filter_month==m %}selected{% endif %}>{{ m }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div style="text-align:left;">
+            <label style="font-size:13px; font-weight:bold;">Airplane ID</label>
+            <select name="filter_aid" class="signup-input" style="width:60px; margin:0; height:34px; padding:0 5px;">
+              <option value="">All</option>
+              {% for a in avail_aids %}
+              <option value="{{ a }}" {% if filter_aid==a %}selected{% endif %}>{{ a }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <button type="submit" class="btn main-btn"
+            style="height:34px; line-height:34px; padding:0 15px; font-size:13px;">Filter</button>
+
+          {% if filter_year or filter_month or filter_aid %}
+          <a href="{{ url_for('manager_reports', active_tab='activity') }}" class="btn secondary-btn"
+            style="height:34px; line-height:34px; padding:0 15px; font-size:13px; text-decoration:none;">Clear</a>
+          {% endif %}
+        </form>
         <div class="table-scroll" style="overflow-x:auto;">
           <table class="results-table" style="width:100%; min-width:980px;">
             <thead>
@@ -218,8 +268,21 @@
         window.dispatchEvent(new Event('resize'));
       }
 
-      // Initialize buttons style
+      // Initialize buttons style and check for active_tab param
       document.addEventListener("DOMContentLoaded", function () {
+        // 1. Check URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const activeTab = urlParams.get('active_tab');
+
+        if (activeTab === 'activity') {
+          // Find the fleet activity button and click it, or call showReport manually
+          const activityBtn = document.querySelector("button[onclick=\"showReport('activity', this)\"]");
+          if (activityBtn) {
+            showReport('activity', activityBtn);
+          }
+        }
+
+        // 2. Set initial opacity for non-active buttons
         document.querySelectorAll('.tab-btn').forEach(b => {
           if (!b.classList.contains('active')) b.style.opacity = '0.6';
         });
