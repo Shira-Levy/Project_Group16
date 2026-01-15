@@ -1218,19 +1218,30 @@ def manager_reports():
     """
 
     # Revenue by plane size/manufacturer/class using ticket prices from Flight
+    # 1. Total Net Revenue (Cash in hand: Active Bookings + Cancellation Fees)
+    q_total_revenue = "SELECT COALESCE(SUM(Price), 0) FROM Booking"
+
+    # 2. Operational Revenue by Airplane/Class (Active Flights Only)
+    # Calculates theoretical revenue based on flight ticket prices for active bookings.
+    # Excludes cancellations since we can't easily attribute cancellation fees to specific classes.
     q_revenue_by_airplane_class = """
     SELECT
         a.Size AS Airplane_Size,
         a.Manufacturer,
-        c.Type AS Class_Type,
-        COALESCE(SUM(b.Price), 0) AS Total_Revenue 
-    FROM Airplane a
-    LEFT JOIN Class c ON c.A_ID = a.A_ID
-    LEFT JOIN Flight f ON f.A_ID = a.A_ID
-    LEFT JOIN Flight_Ticket ft ON ft.F_ID = f.F_ID AND ft.Seat_Class_Type = c.Type
-    LEFT JOIN Booking b ON b.B_ID = ft.B_ID
-    GROUP BY a.Size, a.Manufacturer, c.Type
-    ORDER BY a.Size, a.Manufacturer, c.Type;
+        ft.Seat_Class_Type AS Class_Type,
+        SUM(
+            CASE
+                WHEN ft.Seat_Class_Type = 'Business' THEN f.business_ticket_price
+                ELSE f.regular_ticket_price
+            END
+        ) AS Active_Revenue
+    FROM Flight_Ticket ft
+    JOIN Flight f ON ft.F_ID = f.F_ID
+    JOIN Airplane a ON f.A_ID = a.A_ID
+    JOIN Booking b ON ft.B_ID = b.B_ID
+    WHERE b.Status NOT LIKE '%Cancel%'
+    GROUP BY a.Size, a.Manufacturer, ft.Seat_Class_Type
+    ORDER BY a.Size, a.Manufacturer, ft.Seat_Class_Type;
     """
 
     q_employee_hours = """
@@ -1340,6 +1351,10 @@ def manager_reports():
         avg_occ_row = cursor.fetchone()
         avg_occupancy = float(avg_occ_row[0]) if avg_occ_row and avg_occ_row[0] is not None else 0.0
 
+        cursor.execute(q_total_revenue)
+        total_rev_row = cursor.fetchone()
+        total_revenue_all = float(total_rev_row[0]) if total_rev_row and total_rev_row[0] is not None else 0.0
+
         cursor.execute(q_revenue_by_airplane_class)
         revenue_rows = cursor.fetchall()
 
@@ -1390,6 +1405,7 @@ def manager_reports():
     return render_template(
         "manager_reports.html",
         avg_occupancy=avg_occupancy,
+        total_revenue_all=total_revenue_all,
         revenue=revenue,
         employee_hours=employee_hours,
         cancellation=cancellation,

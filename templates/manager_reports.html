@@ -53,9 +53,9 @@
 
         <div class="table-card" style="padding:14px;">
           <div style="opacity:0.7; font-size:0.95rem;">Total Revenue (All Groups)</div>
-          {% set total_rev = (revenue | sum(attribute='Total_Revenue')) if revenue else 0 %}
+          {% set total_rev = total_revenue_all if total_revenue_all else 0 %}
           <div style="font-size:2rem; font-weight:800; margin-top:6px;">
-            {{ "%.2f"|format(total_rev or 0) }}
+            {{ "%.2f"|format(total_rev) }}
           </div>
         </div>
 
