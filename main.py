@@ -677,7 +677,7 @@ def find_booking():
 
 @app.route("/cancel-booking/<int:booking_id>", methods=["POST"])
 def cancel_booking(booking_id):
-    if session.get("role") != "customer":
+    if session.get("role") not in ["customer", "guest"]:
         return redirect(url_for("login_customer"))
 
     email = session.get("email")

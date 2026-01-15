@@ -82,7 +82,7 @@
                     Flight Crew
                   </a>
 
-                  {% if f.computed_status != "Cancelled" %}
+                  {% if f.computed_status not in ["Cancelled", "Completed"] %}
                   <form method="post" action="{{ url_for('manager_cancel_flight', flight_id=f.F_ID) }}"
                     onsubmit="return confirm('Cancel flight {{f.F_ID}}? This will refund bookings (Price=0).');"
                     style="margin:0;">

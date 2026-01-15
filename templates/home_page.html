@@ -16,6 +16,8 @@
     <!-- USER HEADER -->
     <div class="user-bar">
       <div class="user-left">
+        <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU Logo"
+          style="margin-right: 15px;">
         <div class="user-avatar">
           {{ session.get("first_name")[0] }}
         </div>
@@ -37,15 +39,38 @@
     </div>
 
     <!-- ACTION BUTTONS -->
-    <div class="action-box">
+    <!-- ACTION BUTTONS (TILES) -->
+    <div class="action-grid" style="margin-top: 30px;">
       {% if session.get("role") == "customer" %}
-      <a href="{{ url_for('search') }}" class="btn main-btn">Search Flights</a>
-      <a href="{{ url_for('my_bookings') }}" class="btn secondary-btn">My Bookings</a>
+      <a href="{{ url_for('search') }}" class="btn tile-btn btn-guest">
+        <span class="icon">✈️</span>
+        <span>Search Flights</span>
+        <span class="sub">Book a new trip</span>
+      </a>
+      <a href="{{ url_for('my_bookings') }}" class="btn tile-btn btn-find">
+        <span class="icon">📅</span>
+        <span>My Bookings</span>
+        <span class="sub">View history & status</span>
+      </a>
+
       {% elif session.get("role") == "manager" %}
-      <a href="{{ url_for('manager') }}" class="btn admin-btn">Admin Panel</a>
+      <a href="{{ url_for('manager') }}" class="btn tile-btn btn-manager">
+        <span class="icon">⚙️</span>
+        <span>Admin Panel</span>
+        <span class="sub">Manage flights & staff</span>
+      </a>
+
       {% elif session.get("role") == "guest" %}
-      <a href="{{ url_for('search') }}" class="btn main-btn">Book Flight</a>
-      <a href="{{ url_for('my_bookings') }}" class="btn secondary-btn">My Bookings</a>
+      <a href="{{ url_for('search') }}" class="btn tile-btn btn-guest">
+        <span class="icon">✈️</span>
+        <span>Book Flight</span>
+        <span class="sub">Find your next destination</span>
+      </a>
+      <a href="{{ url_for('my_bookings') }}" class="btn tile-btn btn-find">
+        <span class="icon">📅</span>
+        <span>My Bookings</span>
+        <span class="sub">Track your orders</span>
+      </a>
       {% endif %}
     </div>
 
