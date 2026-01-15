@@ -159,9 +159,14 @@
             <td class="mono">{{ b.B_ID }}</td>
 
             <!-- Past flights: show Completed + original status -->
+            <!-- Past flights: show Cancelled in red, or Completed in green -->
             <td>
+              {% set s = (b.Status or 'Unknown')|lower %}
+              {% if 'cancel' in s %}
+              <span class="pill pill-cancelled">Cancelled</span>
+              {% else %}
               <span class="pill pill-active">Completed</span>
-              <div class="muted">was: {{ b.Status or 'Unknown' }}</div>
+              {% endif %}
             </td>
 
             <td class="mono">{{ b.booking_date }} {{ b.booking_time }}</td>

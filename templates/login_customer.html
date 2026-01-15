@@ -18,29 +18,33 @@
         <p style="color:red; text-align:center;">{{ error }}</p>
         {% endif %}
 
-        <table class="signup-table">
-            <tr>
-                <td colspan="2" class="form-subtitle">Enter your details</td>
-            </tr>
-            <tr>
-                <td>Email</td>
-                <td><input class="signup-input" type="email" name="customer_email" form="customerLogin" required></td>
-            </tr>
-            <tr>
-                <td>Password</td>
-                <td><input class="signup-input" type="password" name="customer_password" form="customerLogin" required>
-                </td>
-            </tr>
-            <tr>
-                <td colspan="2" class="buttons-cell">
-                    <form id="customerLogin" action="{{ url_for('login_customer') }}" method="post"></form>
-                    <input type="submit" value="Login" class="btn" form="customerLogin">
-                    <a href="{{ url_for('home_page') }}" class="btn btn-secondary">Home</a>
-                    <br><br>
-                    <a href="{{ url_for('login_manager') }}" style="font-size: 0.9em;">Are you a Manager? Login here</a>
-                </td>
-            </tr>
-        </table>
+        <div class="form-subtitle" style="margin-bottom: 20px;">Enter your details</div>
+
+        <form id="customerLogin" action="{{ url_for('login_customer') }}" method="post" style="text-align: left;">
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">Email</label>
+                <input class="signup-input" type="email" name="customer_email" required>
+            </div>
+
+            <div style="margin-bottom: 25px;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">Password</label>
+                <input class="signup-input" type="password" name="customer_password" required>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button type="submit" class="btn main-btn" style="flex: 1;">
+                    👤 Login
+                </button>
+                <a href="{{ url_for('home_page') }}" class="btn secondary-btn"
+                    style="flex: 1; text-align: center; line-height: normal; display: flex; align-items: center; justify-content: center;">
+                    🏠 Home
+                </a>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="{{ url_for('login_manager') }}" style="font-size: 0.9em;">Are you a Manager? Login here</a>
+            </div>
+        </form>
     </div>
 </body>
 

@@ -137,10 +137,10 @@ input.btn {
 
 .signup-input {
   width: 100%;
-  padding: 8px 10px;
-  border-radius: 6px;
+  padding: 12px 14px;
+  border-radius: 8px;
   border: 1px solid #b7cde6;
-  font-size: 14px;
+  font-size: 16px;
   box-sizing: border-box;
 }
 

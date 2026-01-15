@@ -84,10 +84,7 @@
           </div>
         </div>
 
-        <div class="table-card" style="padding:14px;">
-          <h3 style="margin:0 0 10px;">Flights Performed vs Cancelled</h3>
-          <canvas id="activityChart" height="140"></canvas>
-        </div>
+
       </div>
     </div>
 
@@ -317,43 +314,7 @@
       });
     }
 
-    // --- Activity chart (performed vs cancelled) ---
-    // We aggregate across airplanes per month for a clean chart.
-    const activityData = {{ airplane_activity | tojson }};
-    const map = new Map();
 
-    for (const row of activityData) {
-      const key = `${row.Year}-${String(row.Month).padStart(2, '0')}`;
-      if (!map.has(key)) map.set(key, { performed: 0, cancelled: 0 });
-      const v = map.get(key);
-      v.performed += Number(row.Performed || 0);
-      v.cancelled += Number(row.Cancelled || 0);
-    }
-
-    const keysSorted = Array.from(map.keys()).sort();
-    const performedSeries = keysSorted.map(k => map.get(k).performed);
-    const cancelledSeries = keysSorted.map(k => map.get(k).cancelled);
-
-    const actCtx = document.getElementById('activityChart');
-    if (actCtx) {
-      new Chart(actCtx, {
-        type: 'bar',
-        data: {
-          labels: keysSorted,
-          datasets: [
-            { label: 'Performed Flights', data: performedSeries },
-            { label: 'Cancelled Flights', data: cancelledSeries }
-          ]
-        },
-        options: {
-          responsive: true,
-          plugins: { legend: { display: true } },
-          scales: {
-            y: { beginAtZero: true, title: { display: true, text: 'Flights' } }
-          }
-        }
-      });
-    }
   </script>
 </body>
 

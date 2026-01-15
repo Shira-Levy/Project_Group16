@@ -30,6 +30,7 @@
                         <th>Flight Date</th>
                         <th>Flight Time</th>
                         <th>Tickets</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -53,6 +54,23 @@
                         <td class="mono">{{ booking.Date_of_flight }}</td>
                         <td class="mono">{{ booking.Time_of_flight }}</td>
                         <td class="mono">{{ booking.tickets_count }}</td>
+                        <td class="actions-col">
+                            {% set s = (booking.Status or 'Unknown')|lower %}
+                            {% if s not in ['cancelled', 'completed', 'manager cancelled'] %}
+                            {% if can_cancel %}
+                            <form method="POST" action="{{ url_for('cancel_booking', booking_id=booking.B_ID) }}"
+                                onsubmit="return confirm('Note: Cancelling a booking involves a fee of 5% of the transaction amount.\nAre you sure you want to proceed?');">
+                                <button type="submit" class="btn btn-small secondary-btn">Cancel</button>
+                            </form>
+                            {% else %}
+                            <span class="badge-error" style="color: #b00020; font-size: 0.85rem;">
+                                Cannot cancel (&lt; 36h from departure)
+                            </span>
+                            {% endif %}
+                            {% else %}
+                            <span style="opacity: 0.5;">—</span>
+                            {% endif %}
+                        </td>
                     </tr>
                 </tbody>
             </table>

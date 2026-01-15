@@ -574,7 +574,7 @@ def my_bookings():
         JOIN Flight_Ticket t ON t.B_ID = b.B_ID
         JOIN Flight f ON f.F_ID = t.F_ID
         WHERE b.Client_Email = %s
-          AND b.Status != 'Cancelled'
+          -- Show all bookings including Cancelled
         GROUP BY b.B_ID, b.Status, b.booking_date, b.booking_time
         ORDER BY flight_date DESC, flight_time DESC
     """
@@ -613,8 +613,13 @@ def my_bookings():
             t = datetime.strptime(f"{hours:02d}:{minutes:02d}:{seconds:02d}", "%H:%M:%S").time()
 
         flight_dt = datetime.combine(b["Date_of_flight"], t)
-
-        if flight_dt >= now:
+        
+        # User request: Cancelled flights should appear in "Past"
+        # Logic: If flight is in the future AND active -> Upcoming.
+        #        If flight is in past OR Cancelled -> Past.
+        is_cancelled = (b["Status"] or "").lower() == "cancelled"
+        
+        if flight_dt >= now and not is_cancelled:
             upcoming.append(b)
         else:
             past.append(b)
@@ -672,7 +677,25 @@ def find_booking():
         "Time_of_flight": r[7],
     }
 
-    return render_template("view_booking_single.html", booking=booking)
+    # Calculate cancellation eligibility (36h rule)
+    t_val = r[7]
+    if isinstance(t_val, timedelta):
+        total_seconds = int(t_val.total_seconds())
+        hrs = (total_seconds // 3600) % 24
+        mins = (total_seconds % 3600) // 60
+        secs = total_seconds % 60
+        t_val = datetime.strptime(f"{hrs:02d}:{mins:02d}:{secs:02d}", "%H:%M:%S").time()
+
+    flight_dt = datetime.combine(r[6], t_val)
+    can_cancel = flight_dt > (datetime.now() + timedelta(hours=36))
+
+    # Auto-login as guest if not logged in, to enable cancellation
+    if not session.get("role"):
+        session["role"] = "guest"
+        session["email"] = email
+        session["first_name"] = "Guest"
+
+    return render_template("view_booking_single.html", booking=booking, can_cancel=can_cancel)
 
 
 @app.route("/cancel-booking/<int:booking_id>", methods=["POST"])
@@ -1133,7 +1156,7 @@ def manager_cancel_flight(flight_id):
         # 3) refund bookings => Price = 0 AND Status = Manager Cancelled
         cursor.execute("""
             UPDATE Booking
-            SET Price = 0, Status = 'Manager Cancelled'
+            SET Price = 0, Cancellation_Fee = 0, Status = 'Manager Cancelled'
             WHERE B_ID IN (
                 SELECT DISTINCT B_ID
                 FROM Flight_Ticket
@@ -1197,27 +1220,17 @@ def manager_reports():
     # Revenue by plane size/manufacturer/class using ticket prices from Flight
     q_revenue_by_airplane_class = """
     SELECT
-        a.A_ID,
         a.Size AS Airplane_Size,
         a.Manufacturer,
         c.Type AS Class_Type,
-        COALESCE(SUM(b.Price), 0) AS Total_Revenue
+        COALESCE(SUM(b.Price), 0) AS Total_Revenue 
     FROM Airplane a
-    LEFT JOIN Class c
-           ON c.A_ID = a.A_ID
-    LEFT JOIN Flight f
-           ON f.A_ID = a.A_ID
-    LEFT JOIN Flight_Ticket ft
-           ON ft.F_ID = f.F_ID
-          AND ft.Seat_Class_Type = c.Type
-    LEFT JOIN Booking b
-           ON b.B_ID = ft.B_ID
-           -- Previously filtered out 'Cancel', but now 'Cancelled' bookings have a 5% fee which counts as revenue.
-           -- So we include ALL bookings linked to this ticket.
-    GROUP BY
-        a.A_ID, a.Size, a.Manufacturer, c.Type
-    ORDER BY
-        a.A_ID, c.Type;
+    LEFT JOIN Class c ON c.A_ID = a.A_ID
+    LEFT JOIN Flight f ON f.A_ID = a.A_ID
+    LEFT JOIN Flight_Ticket ft ON ft.F_ID = f.F_ID AND ft.Seat_Class_Type = c.Type
+    LEFT JOIN Booking b ON b.B_ID = ft.B_ID
+    GROUP BY a.Size, a.Manufacturer, c.Type
+    ORDER BY a.Size, a.Manufacturer, c.Type;
     """
 
     q_employee_hours = """
@@ -1341,7 +1354,7 @@ def manager_reports():
 
     # --- Shape data for template ---
     revenue = [
-        {"Airplane_Size": r[1], "Manufacturer": r[2], "Class_Type": r[3], "Total_Revenue": float(r[4] or 0)}
+        {"Airplane_Size": r[0], "Manufacturer": r[1], "Class_Type": r[2], "Total_Revenue": float(r[3] or 0)}
         for r in revenue_rows
     ]
 
