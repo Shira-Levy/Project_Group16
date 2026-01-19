@@ -50,6 +50,7 @@ def db_curr():
             mydb.close()
 
 
+
 def next_id(cursor, table, col):
     cursor.execute(f"SELECT COALESCE(MAX({col}), 0) + 1 FROM {table}")
     return cursor.fetchone()[0]
@@ -330,7 +331,6 @@ def choose_seats():
     if not flight_id or not num_tickets or num_tickets < 1:
         return redirect(url_for("search"))
 
-    # ✅ Bring also ticket prices
     query_flight = """
         SELECT A_ID, regular_ticket_price, business_ticket_price
         FROM Flight
@@ -1265,12 +1265,12 @@ def manager_reports():
     # Monthly cancellation rate (works only if you store cancelled bookings in Booking.Status)
     q_cancellation_rate = """
     SELECT 
-        YEAR(b.booking_date) AS Year,
-        MONTH(b.booking_date) AS Month,
-        COUNT(DISTINCT b.B_ID) AS Total_Bookings,
-        SUM(CASE WHEN LOWER(b.Status) LIKE '%cancel%' THEN 1 ELSE 0 END) AS Customer_Canceled_Bookings,
-        (SUM(CASE WHEN LOWER(b.Status) LIKE '%cancel%' THEN 1 ELSE 0 END) * 100.0) / COUNT(DISTINCT b.B_ID) AS Cancellation_Rate_Percentage
-    FROM Booking b
+        YEAR(booking_date) AS Year,
+        MONTH(booking_date) AS Month,
+        COUNT(B_ID) AS Total_Bookings,
+        SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) AS Customer_Canceled_Bookings,
+        (SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) * 100.0) / COUNT(B_ID) AS Cancellation_Rate_Percentage
+    FROM Booking
     GROUP BY Year, Month
     ORDER BY Year ASC, Month ASC;
     """
