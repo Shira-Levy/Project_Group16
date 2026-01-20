@@ -86,11 +86,14 @@ def signup():
     last_name = request.form.get("last_name", "").strip()
     email = request.form.get("email", "").strip().lower()
     password = request.form.get("password", "")
-    phone = request.form.get("phone", "").strip()
+    phones = request.form.getlist("phones")
     passport = request.form.get("passport", "").strip()
     date_of_birth = request.form.get("date_of_birth", "").strip()
 
-    if not all([first_name, last_name, email, password, phone, passport, date_of_birth]):
+    # Ensure at least one phone number is provided
+    primary_phone = phones[0].strip() if phones else ""
+
+    if not all([first_name, last_name, email, password, primary_phone, passport, date_of_birth]):
         return render_template('sign_up_form.html', error="Please fill all fields.")
 
     try:
@@ -110,9 +113,18 @@ def signup():
             cursor.execute("""
                 INSERT INTO Registered
                 (Email_R_ID, Registration_date, Date_of_birth, Passport_number,
-                 Phone_number, First_Name, Last_Name, Password)
-                VALUES (%s, CURDATE(), %s, %s, %s, %s, %s, %s)
-            """, (email, date_of_birth, passport, phone, first_name, last_name, password))
+                 First_Name, Last_Name, Password)
+                VALUES (%s, CURDATE(), %s, %s, %s, %s, %s)
+            """, (email, date_of_birth, passport, first_name, last_name, password))
+
+            # Insert all phones into the new table
+            for p in phones:
+                p_clean = p.strip()
+                if p_clean:
+                    cursor.execute("""
+                        INSERT INTO registered_phone (Email_R_ID, Phone_number)
+                        VALUES (%s, %s)
+                    """, (email, p_clean))
 
     except mysql.connector.Error as err:
         return render_template('sign_up_form.html', error=f"Database error: {err}")
@@ -332,7 +344,7 @@ def choose_seats():
         return redirect(url_for("search"))
 
     query_flight = """
-        SELECT A_ID, regular_ticket_price, business_ticket_price
+        SELECT A_ID
         FROM Flight
         WHERE F_ID=%s
         LIMIT 1
@@ -361,8 +373,14 @@ def choose_seats():
             return redirect(url_for("search"))
 
         airplane_id = row[0]
-        regular_price = float(row[1] or 0)
-        business_price = float(row[2] or 0)
+        
+        # KEY CHANGE: Fetch prices from flight_class_price
+        cursor.execute("SELECT Seat_Class_Type, Ticket_Price FROM flight_class_price WHERE F_ID=%s", (flight_id,))
+        p_rows = cursor.fetchall()
+        p_dict = {r[0]: float(r[1]) for r in p_rows}
+        
+        regular_price = p_dict.get("Regular", 0.0)
+        business_price = p_dict.get("Business", 0.0)
 
         cursor.execute(query_seats, (airplane_id, flight_id))
         seats = cursor.fetchall()
@@ -480,13 +498,24 @@ def _perform_booking(customer_email, flight_id, num_tickets, selected):
         parsed.append((col, int(row_str), class_type))
 
     with db_curr() as cursor:
-        cursor.execute("SELECT A_ID, regular_ticket_price, business_ticket_price FROM Flight WHERE F_ID=%s LIMIT 1", (flight_id,))
+        # Fetch prices from new table
+        cursor.execute("SELECT Seat_Class_Type, Ticket_Price FROM flight_class_price WHERE F_ID=%s", (flight_id,))
+        price_rows = cursor.fetchall()
+        
+        # Default to 0 if missing (should not happen if added correctly)
+        prices = {}
+        for r in price_rows:
+            # Normalize keys to lowercase for robust lookup
+            prices[r[0].strip().lower()] = float(r[1])
+
+        if not prices:
+             return render_template("booking_success.html", error=f"System Error: No price data found for Flight {flight_id}. Please contact support.")
+
+        cursor.execute("SELECT A_ID FROM Flight WHERE F_ID=%s LIMIT 1", (flight_id,))
         fr = cursor.fetchone()
         if not fr:
             return redirect(url_for("search"))
         airplane_id = fr[0]
-        regular_price_val = float(fr[1] or 0)
-        business_price_val = float(fr[2] or 0)
 
         check_seat_available = """
             SELECT 1
@@ -509,10 +538,21 @@ def _perform_booking(customer_email, flight_id, num_tickets, selected):
             if not cursor.fetchone():
                 return render_template("booking_success.html", error="One or more selected seats are no longer available.")
             
-            if class_type.lower() == 'business':
-                calc_total_price += business_price_val
-            else:
-                calc_total_price += regular_price_val
+            # Use price from dictionary (case-insensitive)
+            # Check availability explicitly to debug
+            c_key = class_type.strip().lower()
+            
+            # Map 'economy' from frontend to 'regular' in DB if needed
+            if c_key == 'economy':
+                c_key = 'regular'
+            
+            if c_key not in prices:
+                 return render_template("booking_success.html", error=f"Price missing for class '{class_type}' (mapped to '{c_key}'). Available: {list(prices.keys())}")
+            
+            calc_total_price += prices.get(c_key, 0.0)
+            
+        if calc_total_price <= 0:
+             return render_template("booking_success.html", error=f"Calculated price is 0. Something is wrong with the data.")
 
         calc_cancellation_fee = calc_total_price * 0.05
 
@@ -560,7 +600,21 @@ def my_bookings():
     if not email:
         return redirect(url_for("login_customer"))
 
-    query = """
+    # 1. Fetch available statuses for this user for filter dropdown
+    status_query = "SELECT DISTINCT Status FROM Booking WHERE Client_Email = %s"
+    available_statuses = []
+    with db_curr() as cursor:
+        cursor.execute(status_query, (email,))
+        for r in cursor.fetchall():
+            if r[0]:
+                available_statuses.append(r[0])
+    
+    # 2. Check for active filter
+    filter_status = request.args.get("status")
+
+    # 3. Main Query with optional filter
+    query_parts = [
+        """
         SELECT
             b.B_ID,
             b.Status,
@@ -574,13 +628,21 @@ def my_bookings():
         JOIN Flight_Ticket t ON t.B_ID = b.B_ID
         JOIN Flight f ON f.F_ID = t.F_ID
         WHERE b.Client_Email = %s
-          -- Show all bookings including Cancelled
-        GROUP BY b.B_ID, b.Status, b.booking_date, b.booking_time
-        ORDER BY flight_date DESC, flight_time DESC
-    """
+        """
+    ]
+    query_params = [email]
+
+    if filter_status and filter_status in available_statuses:
+        query_parts.append("AND b.Status = %s")
+        query_params.append(filter_status)
+
+    query_parts.append("GROUP BY b.B_ID, b.Status, b.booking_date, b.booking_time")
+    query_parts.append("ORDER BY flight_date DESC, flight_time DESC")
+    
+    final_query = "\n".join(query_parts)
 
     with db_curr() as cursor:
-        cursor.execute(query, (email,))
+        cursor.execute(final_query, tuple(query_params))
         rows = cursor.fetchall()
 
     bookings = []
@@ -617,8 +679,11 @@ def my_bookings():
         # User request: Cancelled flights should appear in "Past"
         # Logic: If flight is in the future AND active -> Upcoming.
         #        If flight is in past OR Cancelled -> Past.
-        is_cancelled = (b["Status"] or "").lower() == "cancelled"
+        is_cancelled = "cancel" in (b["Status"] or "").lower()
         
+        # Calculate cancellation eligibility (36h rule)
+        b["can_cancel"] = flight_dt > (now + timedelta(hours=36))
+
         if flight_dt >= now and not is_cancelled:
             upcoming.append(b)
         else:
@@ -628,7 +693,13 @@ def my_bookings():
     upcoming.sort(key=lambda x: (x["Date_of_flight"], x["Time_of_flight"]))        # nearest first
     past.sort(key=lambda x: (x["Date_of_flight"], x["Time_of_flight"]), reverse=True)  # newest past first
 
-    return render_template("my_booking.html", upcoming=upcoming, past=past)
+    return render_template(
+        "my_booking.html",
+        upcoming=upcoming,
+        past=past,
+        available_statuses=available_statuses,
+        current_status=filter_status
+    )
 
 
 @app.route('/find-booking', methods=['GET', 'POST'])
@@ -837,6 +908,7 @@ def manager_flights():
             "booked_seats": booked_seats,
             "seats_left": seats_left,
             "computed_status": computed,
+            "can_cancel_manager": flight_dt >= (now + timedelta(hours=72))
         }
 
         if status_filter == "All" or status_filter == computed:
@@ -1059,12 +1131,21 @@ def manager_add_flight():
         cursor.execute("""
             INSERT INTO Flight
             (F_ID, Status, Type, Date_of_flight, Time_of_flight,
-             Date_of_Arrival, Time_of_Arrival, A_ID, R_ID,
-             regular_ticket_price, business_ticket_price)
+             Date_of_Arrival, Time_of_Arrival, A_ID, R_ID)
             VALUES
-            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (new_f_id, "Active", f_type, date_f, time_f, date_a, time_a, a_id, r_id,
-              regular_price, business_price))
+            (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (new_f_id, "Active", f_type, date_f, time_f, date_a, time_a, a_id, r_id))
+
+        # Insert Prices into flight_class_price
+        cursor.execute("""
+            INSERT INTO flight_class_price (F_ID, Seat_Class_Type, Ticket_Price)
+            VALUES (%s, 'Regular', %s)
+        """, (new_f_id, regular_price))
+
+        cursor.execute("""
+            INSERT INTO flight_class_price (F_ID, Seat_Class_Type, Ticket_Price)
+            VALUES (%s, 'Business', %s)
+        """, (new_f_id, business_price))
 
         # insert crew assignments
         for e_id in selected_pilots:
@@ -1229,15 +1310,11 @@ def manager_reports():
         a.Size AS Airplane_Size,
         a.Manufacturer,
         ft.Seat_Class_Type AS Class_Type,
-        SUM(
-            CASE
-                WHEN ft.Seat_Class_Type = 'Business' THEN f.business_ticket_price
-                ELSE f.regular_ticket_price
-            END
-        ) AS Active_Revenue
+        SUM(fcp.Ticket_Price) AS Active_Revenue
     FROM Flight_Ticket ft
     JOIN Flight f ON ft.F_ID = f.F_ID
     JOIN Airplane a ON f.A_ID = a.A_ID
+    JOIN flight_class_price fcp ON f.F_ID = fcp.F_ID AND fcp.Seat_Class_Type = ft.Seat_Class_Type
     JOIN Booking b ON ft.B_ID = b.B_ID
     WHERE b.Status NOT LIKE '%Cancel%'
     GROUP BY a.Size, a.Manufacturer, ft.Seat_Class_Type
@@ -1430,15 +1507,13 @@ def booking_review_page():
     bus_count = 0
 
     with db_curr() as cursor:
-        cursor.execute("""
-            SELECT regular_ticket_price, business_ticket_price
-            FROM Flight
-            WHERE F_ID = %s
-        """, (flight_id,))
-        flight = cursor.fetchone()
-
-        regular_price = float(flight[0])
-        business_price = float(flight[1])
+        # Fetch prices from new table
+        cursor.execute("SELECT Seat_Class_Type, Ticket_Price FROM flight_class_price WHERE F_ID=%s", (flight_id,))
+        p_rows = cursor.fetchall()
+        p_dict = {r[0]: float(r[1]) for r in p_rows}
+        
+        regular_price = p_dict.get("Regular", 0.0)
+        business_price = p_dict.get("Business", 0.0)
 
         for seat in seats:
             col, row, cls = seat.split("|")

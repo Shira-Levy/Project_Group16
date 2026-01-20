@@ -16,12 +16,19 @@
       <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU Logo">
     </div>
 
+    {% if error %}
+    <div class="alert alert-danger" style="text-align:center; color: red; font-weight: bold; margin-bottom: 20px;">
+      <h3>⚠️ Booking Failed</h3>
+      <p>{{ error }}</p>
+    </div>
+    {% else %}
     <p style="text-align:center; font-size:16px; margin-bottom:20px;">
       Your booking has been successfully completed.
     </p>
     <p style="text-align:center; font-size:18px; font-weight:bold; margin-bottom:20px; color: #0082c8;">
       Order Number: {{ booking_id }}
     </p>
+    {% endif %}
 
     <div class="results-wrapper">
       <table class="results-table">

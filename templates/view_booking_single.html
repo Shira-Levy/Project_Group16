@@ -41,7 +41,7 @@
                             {% set s = (booking.Status or 'Unknown')|lower %}
                             {% if s == 'confirmed' %}
                             <span class="pill pill-active">{{ booking.Status }}</span>
-                            {% elif s == 'cancelled' %}
+                            {% elif 'cancel' in s %}
                             <span class="pill pill-cancelled">{{ booking.Status }}</span>
                             {% elif s == 'scheduled' %}
                             <span class="pill pill-scheduled">{{ booking.Status }}</span>
@@ -63,8 +63,8 @@
                                 <button type="submit" class="btn btn-small secondary-btn">Cancel</button>
                             </form>
                             {% else %}
-                            <span class="badge-error" style="color: #b00020; font-size: 0.85rem;">
-                                Cannot cancel (&lt; 36h from departure)
+                            <span class="badge-error" style="color: #b00020; font-size: 0.85rem; font-weight: bold;">
+                                Cannot cancel within 36 hours of flight
                             </span>
                             {% endif %}
                             {% else %}
