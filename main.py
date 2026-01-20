@@ -379,7 +379,7 @@ def choose_seats():
         p_rows = cursor.fetchall()
         p_dict = {r[0]: float(r[1]) for r in p_rows}
         
-        regular_price = p_dict.get("Regular", 0.0)
+        regular_price = p_dict.get("Economy", 0.0)
         business_price = p_dict.get("Business", 0.0)
 
         cursor.execute(query_seats, (airplane_id, flight_id))
@@ -542,9 +542,9 @@ def _perform_booking(customer_email, flight_id, num_tickets, selected):
             # Check availability explicitly to debug
             c_key = class_type.strip().lower()
             
-            # Map 'economy' from frontend to 'regular' in DB if needed
-            if c_key == 'economy':
-                c_key = 'regular'
+            # Map 'economy' from frontend to 'Economics'/'Economy' in DB
+            # if c_key == 'economy':
+            #    c_key = 'Economy'
             
             if c_key not in prices:
                  return render_template("booking_success.html", error=f"Price missing for class '{class_type}' (mapped to '{c_key}'). Available: {list(prices.keys())}")
@@ -948,14 +948,16 @@ def manager_add_flight():
     date_f = request.form.get("date_f")   # YYYY-MM-DD
     time_f = request.form.get("time_f")   # HH:MM
 
-    regular_price = request.form.get("regular_price", type=float)
+    regular_price = request.form.get("economy_price", type=float)
     business_price = request.form.get("business_price", type=float)
 
     airplanes, routes = load_dropdowns()
 
-    if not all([a_id, r_id, date_f, time_f, regular_price is not None, business_price is not None]):
+
+
+    if not all([a_id, r_id, date_f, time_f, regular_price is not None]):
         return render_template("manager_add_flight.html", airplanes=airplanes, routes=routes,
-                               error="Please fill all fields (including prices).")
+                               error="Please fill all text fields and Economy Price.")
 
     # parse departure datetime
     try:
@@ -997,8 +999,12 @@ def manager_add_flight():
         # requirements: Large->3 pilots + 6 attendants ; Small->2 pilots + 3 attendants
         if airplane_size == "large":
             req_pilots, req_attendants = 3, 6
+            if business_price is None:
+                 return render_template("manager_add_flight.html", airplanes=airplanes, routes=routes,
+                                   error="Business Ticket Price is required for Large airplanes.")
         else:
             req_pilots, req_attendants = 2, 3
+            # For small airplanes, we ignore business_price (can be None)
 
         new_dep_str = departure_dt.strftime("%Y-%m-%d %H:%M:%S")
         new_arr_str = arrival_dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -1075,7 +1081,7 @@ def manager_add_flight():
                 available_pilots=available_pilots,
                 available_attendants=available_attendants,
                 # ✅ keep prices for confirm stage
-                regular_price=regular_price,
+                economy_price=regular_price,
                 business_price=business_price
             )
 
@@ -1093,7 +1099,7 @@ def manager_add_flight():
                 req_pilots=req_pilots, req_attendants=req_attendants,
                 available_pilots=available_pilots,
                 available_attendants=available_attendants,
-                regular_price=regular_price,
+                economy_price=regular_price,
                 business_price=business_price
             )
 
@@ -1137,15 +1143,17 @@ def manager_add_flight():
         """, (new_f_id, "Active", f_type, date_f, time_f, date_a, time_a, a_id, r_id))
 
         # Insert Prices into flight_class_price
-        cursor.execute("""
-            INSERT INTO flight_class_price (F_ID, Seat_Class_Type, Ticket_Price)
-            VALUES (%s, 'Regular', %s)
-        """, (new_f_id, regular_price))
 
         cursor.execute("""
             INSERT INTO flight_class_price (F_ID, Seat_Class_Type, Ticket_Price)
-            VALUES (%s, 'Business', %s)
-        """, (new_f_id, business_price))
+            VALUES (%s, 'Economy', %s)
+        """, (new_f_id, regular_price))
+
+        if business_price is not None:
+            cursor.execute("""
+                INSERT INTO flight_class_price (F_ID, Seat_Class_Type, Ticket_Price)
+                VALUES (%s, 'Business', %s)
+            """, (new_f_id, business_price))
 
         # insert crew assignments
         for e_id in selected_pilots:
@@ -1626,7 +1634,7 @@ def booking_review_page():
         p_rows = cursor.fetchall()
         p_dict = {r[0]: float(r[1]) for r in p_rows}
         
-        regular_price = p_dict.get("Regular", 0.0)
+        regular_price = p_dict.get("Economy", 0.0)
         business_price = p_dict.get("Business", 0.0)
 
         for seat in seats:
@@ -1651,7 +1659,7 @@ def booking_review_page():
         "booking_review.html",
         seats=seat_data,
         flight_id=flight_id,
-        regular_price=regular_price,
+        economy_price=regular_price,
         business_price=business_price,
         econ_count=econ_count,
         bus_count=bus_count,

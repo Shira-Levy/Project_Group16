@@ -50,11 +50,14 @@
       <label><b>Flight Time</b></label>
       <input type="time" name="time_f" class="signup-input" required>
 
-      <label><b>Regular Ticket Price</b></label>
-      <input type="number" name="regular_price" class="signup-input" min="0" step="0.01" required>
+      <label><b>Economy Ticket Price</b></label>
+      <input type="number" name="economy_price" class="signup-input" min="0" step="0.01" required>
 
-      <label><b>Business Ticket Price</b></label>
-      <input type="number" name="business_price" class="signup-input" min="0" step="0.01" required>
+      <div id="businessPriceContainer">
+        <label><b>Business Ticket Price</b></label>
+        <input type="number" name="business_price" id="businessPriceInput" class="signup-input" min="0" step="0.01"
+          required>
+      </div>
 
 
       <button class="btn main-btn" type="submit" style="margin-top:14px;">
@@ -66,11 +69,23 @@
   <script>
     const airplaneSelect = document.getElementById("airplaneSelect");
     const routeSelect = document.getElementById("routeSelect");
+    const businessPriceContainer = document.getElementById("businessPriceContainer");
+    const businessPriceInput = document.getElementById("businessPriceInput");
 
     function filterRoutesByAirplane() {
       const selectedAirplane = airplaneSelect.options[airplaneSelect.selectedIndex];
       const size = (selectedAirplane.dataset.size || "").toLowerCase();
       const isSmall = (size === "small");
+
+      // Toggle Business Price
+      if (isSmall) {
+        businessPriceContainer.style.display = "none";
+        businessPriceInput.required = false;
+        businessPriceInput.value = "";
+      } else {
+        businessPriceContainer.style.display = "block";
+        businessPriceInput.required = true;
+      }
 
       let firstEnabledValue = null;
 

@@ -5,3 +5,6 @@ __pycache__/
 .env
 flask_session_data/
 .DS_Store
+
+# Documentation
+הנחיות פרויקט - בסיסי נתונים ומערכות מידע.pdf

@@ -47,8 +47,8 @@
 
     <div style="margin-top:18px; max-width:720px; margin-left:auto; margin-right:auto;">
       <div style="display:flex; justify-content:space-between; padding:10px 6px;">
-        <span>Economy tickets: <b>{{ econ_count }}</b> × {{ "%.2f"|format(regular_price) }}</span>
-        <span><b>{{ "%.2f"|format(econ_count * regular_price) }}</b></span>
+        <span>Economy tickets: <b>{{ econ_count }}</b> × {{ "%.2f"|format(economy_price) }}</span>
+        <span><b>{{ "%.2f"|format(econ_count * economy_price) }}</b></span>
       </div>
       <div style="display:flex; justify-content:space-between; padding:10px 6px;">
         <span>Business tickets: <b>{{ bus_count }}</b> × {{ "%.2f"|format(business_price) }}</span>

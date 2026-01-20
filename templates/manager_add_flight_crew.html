@@ -37,8 +37,8 @@
       <input type="hidden" name="date_f" value="{{ date_f }}">
       <input type="hidden" name="time_f" value="{{ time_f }}">
 
-      <input type="hidden" name="regular_price" value="{{ regular_price }}">
-      <input type="hidden" name="business_price" value="{{ business_price }}">
+      <input type="hidden" name="economy_price" value="{{ economy_price }}">
+      <input type="hidden" name="business_price" value="{{ business_price or '' }}">
 
       <!-- PILOTS -->
       <label><b>Choose Pilots (select {{ req_pilots }})</b></label>
