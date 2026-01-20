@@ -1314,7 +1314,8 @@ def manager_reports():
     FROM Flight_Ticket ft
     JOIN Flight f ON ft.F_ID = f.F_ID
     JOIN Airplane a ON f.A_ID = a.A_ID
-    JOIN flight_class_price fcp ON f.F_ID = fcp.F_ID AND fcp.Seat_Class_Type = ft.Seat_Class_Type
+    JOIN flight_class_price fcp ON f.F_ID = fcp.F_ID 
+        AND fcp.Seat_Class_Type = ft.Seat_Class_Type
     JOIN Booking b ON ft.B_ID = b.B_ID
     WHERE b.Status NOT LIKE '%Cancel%'
     GROUP BY a.Size, a.Manufacturer, ft.Seat_Class_Type
@@ -1339,17 +1340,49 @@ def manager_reports():
     ORDER BY e.FirstName, e.LastName;
     """
 
-    # Monthly cancellation rate (works only if you store cancelled bookings in Booking.Status)
     q_cancellation_rate = """
-    SELECT 
-        YEAR(booking_date) AS Year,
-        MONTH(booking_date) AS Month,
-        COUNT(B_ID) AS Total_Bookings,
-        SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) AS Customer_Canceled_Bookings,
-        (SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) * 100.0) / COUNT(B_ID) AS Cancellation_Rate_Percentage
+    SELECT
+        YEAR(Booking_Date) as Year,
+        MONTH(Booking_Date) as Month,
+        COUNT(*) as Total_Bookings,
+        SUM(CASE WHEN Status LIKE '%Cancel%' THEN 1 ELSE 0 END) as Cancelled_Bookings,
+        (SUM(CASE WHEN Status LIKE '%Cancel%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) as Cancellation_Rate
     FROM Booking
-    GROUP BY Year, Month
-    ORDER BY Year ASC, Month ASC;
+    GROUP BY YEAR(Booking_Date), MONTH(Booking_Date)
+    ORDER BY Year DESC, Month DESC;
+    """
+
+    # ... (existing activity query construction lines 1371-1425 assumed unchanged if not included here, targeting main block) ...
+
+    q_employee_hours = """
+    SELECT 
+        e.FirstName, 
+        e.LastName,
+        CASE 
+            WHEN r.Flight_Duration >= 6 THEN 'Long Flight'
+            ELSE 'Short Flight'
+        END AS Flight_Category,
+        SUM(r.Flight_Duration) AS Total_Flight_Hours
+    FROM Employee e
+    JOIN Flight_Crew fc ON e.E_ID = fc.E_ID
+    JOIN Flight f       ON fc.F_ID = f.F_ID
+    JOIN Route r        ON f.R_ID = r.R_ID
+    WHERE f.Status <> 'Cancelled'
+    GROUP BY e.E_ID, e.FirstName, e.LastName, Flight_Category
+    ORDER BY e.FirstName, e.LastName;
+    """
+
+    q_cancellation_rate = """
+    SELECT
+        YEAR(booking_date)  AS Year,
+        MONTH(booking_date) AS Month,
+        COUNT(*) AS Total_Bookings,
+        SUM(Status = 'Cancelled') AS Customer_Canceled_Bookings,
+        ROUND(100 * SUM(Status = 'Cancelled') / COUNT(*), 2) AS Cancellation_Rate_Percentage
+    FROM Booking
+    WHERE Booking_Date IS NOT NULL
+    GROUP BY YEAR(booking_date), MONTH(booking_date)
+    ORDER BY YEAR(booking_date) ASC, MONTH(booking_date) ASC;
     """
 
     # --- Handle Filters for Activity Report ---
@@ -1358,8 +1391,7 @@ def manager_reports():
     f_aid = request.args.get('filter_aid')
 
     filter_conditions = []
-    params = []
-
+    
     if f_year:
         filter_conditions.append(f"YEAR(Date_of_flight) = {int(f_year)}")
     if f_month:
@@ -1372,6 +1404,84 @@ def manager_reports():
         where_clause = "WHERE " + where_clause
     else:
         where_clause = ""
+    
+    q_monthly_airplane_activity = f"""
+    WITH MonthlyBasicStats AS (
+        SELECT 
+            A_ID,
+            YEAR(Date_of_flight) AS Flight_Year,
+            MONTH(Date_of_flight) AS Flight_Month,
+            SUM(CASE WHEN Status <> 'Cancelled' THEN 1 ELSE 0 END) AS Performed_Flights,
+            SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) AS Cancelled_Flights,
+            COUNT(DISTINCT CASE WHEN Status <> 'Cancelled' THEN Date_of_flight END) / 30.0 AS Utilization_Rate
+        FROM Flight
+        {where_clause}
+        GROUP BY A_ID, Flight_Year, Flight_Month
+    ),
+    RouteFrequency AS (
+        SELECT 
+            A_ID,
+            YEAR(Date_of_flight) AS Flight_Year,
+            MONTH(Date_of_flight) AS Flight_Month,
+            R_ID,
+            ROW_NUMBER() OVER (
+                PARTITION BY A_ID, YEAR(Date_of_flight), MONTH(Date_of_flight)
+                ORDER BY COUNT(*) DESC
+            ) AS Route_Rank
+        FROM Flight
+        WHERE Status <> 'Cancelled'
+        {"AND " + where_clause[6:] if where_clause else ""}
+        GROUP BY A_ID, Flight_Year, Flight_Month, R_ID
+    )
+    SELECT 
+        ms.A_ID,
+        ms.Flight_Year AS Year,
+        ms.Flight_Month AS Month,
+        ms.Performed_Flights AS Performed,
+        ms.Cancelled_Flights AS Cancelled,
+        ms.Utilization_Rate AS Utilization,
+        CONCAT(r.Airport_Name_Source, ' -> ', r.Airport_Name_Dest) AS DominantRoute
+    FROM MonthlyBasicStats ms
+    LEFT JOIN RouteFrequency rf 
+        ON ms.A_ID = rf.A_ID 
+        AND ms.Flight_Year = rf.Flight_Year 
+        AND ms.Flight_Month = rf.Flight_Month 
+        AND rf.Route_Rank = 1
+    LEFT JOIN Route r ON rf.R_ID = r.R_ID
+    ORDER BY ms.Flight_Year DESC, ms.Flight_Month DESC, ms.A_ID;
+    """
+
+    with db_curr() as cursor:
+        cursor.execute(q_avg_occupancy)
+        avg_occ_row = cursor.fetchone()
+        avg_occupancy = float(avg_occ_row[0]) if avg_occ_row and avg_occ_row[0] is not None else 0.0
+
+        cursor.execute(q_total_revenue)
+        total_rev_row = cursor.fetchone()
+        total_revenue_all = float(total_rev_row[0]) if total_rev_row and total_rev_row[0] is not None else 0.0
+
+        cursor.execute(q_revenue_by_airplane_class)
+        revenue_rows = cursor.fetchall()
+        
+        cursor.execute(q_employee_hours)
+        emp_rows = cursor.fetchall()
+
+        cursor.execute(q_cancellation_rate)
+        cancel_rows = cursor.fetchall()
+
+        cursor.execute(q_monthly_airplane_activity)
+        activity_rows = cursor.fetchall()
+
+    # --- Shape data for template ---
+    revenue = [
+        {"Airplane_Size": r[0], "Manufacturer": r[1], "Class_Type": r[2], "Total_Revenue": float(r[3] or 0), "Active_Revenue": float(r[3] or 0)}
+        for r in revenue_rows
+    ]
+
+    employee_hours = [
+        {"FirstName": r[0], "LastName": r[1], "Category": r[2], "Hours": float(r[3] or 0)}
+        for r in emp_rows
+    ]
     
     # Needs to be injected into the query. Since we have CTEs with GROUP BY, 
     # we should filter inside the CTEs before grouping for efficiency and correctness.
@@ -1434,6 +1544,10 @@ def manager_reports():
 
         cursor.execute(q_revenue_by_airplane_class)
         revenue_rows = cursor.fetchall()
+        
+        # Detect all airplanes to populate missing rows with 0
+        cursor.execute("SELECT DISTINCT Size, Manufacturer FROM Airplane")
+        all_planes_rows = cursor.fetchall()
 
         cursor.execute(q_employee_hours)
         emp_rows = cursor.fetchall()
@@ -1446,7 +1560,7 @@ def manager_reports():
 
     # --- Shape data for template ---
     revenue = [
-        {"Airplane_Size": r[0], "Manufacturer": r[1], "Class_Type": r[2], "Total_Revenue": float(r[3] or 0)}
+        {"Airplane_Size": r[0], "Manufacturer": r[1], "Class_Type": r[2], "Total_Revenue": float(r[3] or 0), "Active_Revenue": float(r[3] or 0)}
         for r in revenue_rows
     ]
 

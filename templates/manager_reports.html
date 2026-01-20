@@ -90,6 +90,13 @@
 
     <!-- SECTION 2: Revenue Table -->
     <div id="revenue" class="report-section" style="display:none;">
+
+      <!-- Revenue Chart -->
+      <div class="table-card" style="padding:14px; margin-bottom:14px;">
+        <h3 style="margin: 0 0 10px;">Revenue Overview</h3>
+        <canvas id="revenueChart" style="max-height: 400px;"></canvas>
+      </div>
+
       <div class="table-card" style="padding:10px; margin-bottom:14px;">
         <h3 style="margin: 8px 8px 12px;">Revenue by Airplane Size / Manufacturer / Class</h3>
         <div class="table-scroll" style="overflow-x:auto;">
@@ -122,6 +129,61 @@
         </div>
       </div>
     </div>
+
+    <!-- Script to render Revenue Chart -->
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const rawData = {{ revenue | default ([]) | tojson
+      }};
+
+      if (!rawData || rawData.length === 0) return;
+
+      // Process data: Group by "Manufacturer Size"
+      const labelsSet = new Set();
+      const dataMap = {}; // { "Boeing Large": { "Business": 100, "Regular": 200 } }
+
+      rawData.forEach(item => {
+        const label = `${item.Manufacturer} ${item.Airplane_Size}`;
+        labelsSet.add(label);
+
+        if (!dataMap[label]) dataMap[label] = {};
+        dataMap[label][item.Class_Type] = item.Active_Revenue || item.Total_Revenue || 0; // fallback keys
+      });
+
+      const labels = Array.from(labelsSet);
+
+      // Prepare datasets
+      // Prepare datasets
+      const classes = ['Business', 'Economy'];
+      const colors = {
+        'Business': 'rgba(54, 162, 235, 0.7)',
+        'Economy': 'rgba(255, 206, 86, 0.7)'
+      };
+
+      const datasets = classes.map(cls => ({
+        label: cls,
+        data: labels.map(lbl => dataMap[lbl][cls] || 0),
+        backgroundColor: colors[cls] || '#ccc'
+      }));
+
+      const ctx = document.getElementById('revenueChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { stacked: true },
+            y: { stacked: true, beginAtZero: true }
+          }
+        }
+      });
+      });
+    </script>
 
     <!-- SECTION 3: Employee Hours -->
     <div id="employees" class="report-section" style="display:none;">
