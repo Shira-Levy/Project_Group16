@@ -6,89 +6,18 @@
   <title>FLYTAU for Managers</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <style>
-    /* Custom styles for Manager Dashboard grid */
-    .manager-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      margin-top: 20px;
-    }
-
-    .tile-btn-m {
-      height: 140px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.2rem;
-      border-radius: 12px;
-      color: white !important;
-      text-decoration: none;
-      transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    .tile-btn-m:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    /* 1. Manage Flights - Blue */
-    .btn-m-flights {
-      background-color: #3b82f6;
-    }
-
-    .btn-m-flights:hover {
-      background-color: #2563eb;
-    }
-
-    /* 2. Add Flight - Green */
-    .btn-m-add {
-      background-color: #10b981;
-    }
-
-    .btn-m-add:hover {
-      background-color: #059669;
-    }
-
-    /* 3. Add Staff - Purple */
-    .btn-m-staff {
-      background-color: #8b5cf6;
-    }
-
-    .btn-m-staff:hover {
-      background-color: #7c3aed;
-    }
-
-    /* 4. Reports - Orange/Red */
-    .btn-m-reports {
-      background-color: #f59e0b;
-    }
-
-    .btn-m-reports:hover {
-      background-color: #d97706;
-    }
-
-    .tile-icon {
-      font-size: 2.5rem;
-      margin-bottom: 12px;
-    }
-
-    @media (max-width: 600px) {
-      .manager-grid {
-        grid-template-columns: 1fr;
-      }
-    }
+    /* Remove custom styles as we now use global styles.css */
   </style>
 </head>
 
 <body>
-  <div class="container">
+  <div class="container wide">
 
+    <!-- USER HEADER (Matches Home Page) -->
     <div class="user-bar">
       <div class="user-left">
-        <img src="{{ url_for('static', filename='flytau_logo.png') }}" alt="FLYTAU"
-          style="height: 40px; width: auto; margin-right: 10px;">
+        <img src="{{ url_for('static', filename='flytau_logo.png') }}" class="small-logo" alt="FLYTAU Logo"
+          style="margin-right: 15px;">
         <div class="user-avatar">
           {{ (session.get('first_name','M')[:1] | upper) }}
         </div>
@@ -102,31 +31,46 @@
         </div>
       </div>
 
-      <a class="btn-logout" href="{{ url_for('logout') }}">Logout</a>
+      <a class="btn btn-logout" href="{{ url_for('logout') }}">Logout</a>
     </div>
 
-    <h2 style="margin: 30px 0 20px; text-align: center;">Welcome to the Manager Dashboard</h2>
+    <!-- WELCOME -->
+    <div class="welcome" style="margin-top: 40px; margin-bottom: 10px;">
+      <h2>Manager Dashboard</h2>
+    </div>
+    <p style="color: #666; margin-bottom: 30px;">Select an action to proceed</p>
 
-    <div class="manager-grid">
-      <a class="tile-btn-m btn-m-flights" href="{{ url_for('manager_flights') }}">
-        <span class="tile-icon">✈️</span>
-        Manage Flights
+    <!-- ACTION GRID (Same as Home Page) -->
+    <div class="action-grid">
+
+      <!-- 1. MANAGE FLIGHTS (Purple) -->
+      <a href="{{ url_for('manager_flights') }}" class="tile-btn btn-find">
+        <span class="icon">✈️</span>
+        <span>Manage Flights</span>
+        <span class="sub">View & Edit Flights</span>
       </a>
 
-      <a class="tile-btn-m btn-m-add" href="{{ url_for('manager_add_flight') }}">
-        <span class="tile-icon">➕</span>
-        Add New Flight
+      <!-- 2. ADD FLIGHT (Green) -->
+      <a href="{{ url_for('manager_add_flight') }}" class="tile-btn btn-signup">
+        <span class="icon">➕</span>
+        <span>Add Flight</span>
+        <span class="sub">Create New Schedule</span>
       </a>
 
-      <a class="tile-btn-m btn-m-staff" href="{{ url_for('manager_add_staff') }}">
-        <span class="tile-icon">👨‍✈️</span>
-        Add Staff Member
+      <!-- 3. ADD STAFF (Blue) -->
+      <a href="{{ url_for('manager_add_staff') }}" class="tile-btn btn-login">
+        <span class="icon">👨‍✈️</span>
+        <span>Add Staff</span>
+        <span class="sub">Register Pilots & Crew</span>
       </a>
 
-      <a class="tile-btn-m btn-m-reports" href="{{ url_for('manager_reports') }}">
-        <span class="tile-icon">📊</span>
-        Management Reports
+      <!-- 4. REPORTS (Pink/Red) -->
+      <a href="{{ url_for('manager_reports') }}" class="tile-btn btn-guest">
+        <span class="icon">📊</span>
+        <span>Reports</span>
+        <span class="sub">Analytics & Stats</span>
       </a>
+
     </div>
 
   </div>
