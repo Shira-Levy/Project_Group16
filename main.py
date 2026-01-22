@@ -11,14 +11,17 @@ import os
 app = Flask(__name__)
 
 
-app.secret_key = "CHANGE_ME_TO_A_RANDOM_SECRET"
+app.secret_key = "ShiraInbalOsher"
 
-session_dir = os.path.join(app.root_path, "flask_session_data")
+# Use the directory of the current file (main.py) to ensure we write to a valid user path
+# This fixes the PermissionError by avoiding the root directory
+basedir = os.path.dirname(os.path.abspath(__file__))
+session_dir = os.path.join(basedir, "flask_session_data")
 os.makedirs(session_dir, exist_ok=True)
 
 app.config.update(
     SESSION_TYPE="filesystem",
-    SESSION_FILE_DIR="/flask_session_data",
+    SESSION_FILE_DIR=session_dir,
     SESSION_PERMANENT=True,
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=10),
     SESSION_REFRESH_EACH_REQUEST=True,
@@ -29,16 +32,32 @@ Session(app)
 
 @contextmanager
 def db_curr():
+    """
+    Context manager for database connections.
+    Handles environment-specific connection strings for both local development and PythonAnywhere.
+    Ensures safe creation and clean teardown of database cursors and connections.
+    """
     mydb=None
     cursor= None
     try:
-        mydb = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="rootroot",
-            database="flytau_db",
-            autocommit=True
-        )
+        if "PYTHONANYWHERE_DOMAIN" in os.environ:
+            # PythonAnywhere Production Configuration
+            mydb = mysql.connector.connect(
+                host="ShiraLevy.mysql.pythonanywhere-services.com",
+                user="ShiraLevy",
+                password="rootroot",
+                database="ShiraLevy$flytau_db",
+                autocommit=True
+            )
+        else:
+            # Local Development Configuration
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="rootroot",
+                database="flytau_db",
+                autocommit=True
+            )
         cursor=mydb.cursor()
         yield cursor
     except mysql.connector.Error as err:
@@ -52,11 +71,32 @@ def db_curr():
 
 
 def next_id(cursor, table, col):
+    """
+    Utility function to calculate the next ID for a given table and column.
+    
+    Args:
+        cursor: Active database cursor.
+        table: The name of the table.
+        col: The primary key or ID column name.
+    
+    Returns:
+        int: The next available ID (max ID + 1).
+    """
     cursor.execute(f"SELECT COALESCE(MAX({col}), 0) + 1 FROM {table}")
     return cursor.fetchone()[0]
 
 
 def _mysql_time_to_timeobj(t):
+    """
+    Helper to convert MySQL TIME/timedelta objects to standard Python time objects.
+    Useful because MySQL connector sometimes returns timedelta for TIME columns.
+    
+    Args:
+        t: The time object from the database (can be timedelta).
+    
+    Returns:
+        datetime.time: A standard Python time object.
+    """
     # mysql TIME sometimes comes as timedelta in your project
     if isinstance(t, timedelta):
         total_seconds = int(t.total_seconds())
@@ -68,6 +108,10 @@ def _mysql_time_to_timeobj(t):
 
 @app.route('/', methods = ['POST','GET'])
 def home_page():
+    """
+    Renders the home page of the application.
+    Supports GET for viewing and POST for submitting form data (e.g., initial search or info).
+    """
     if request.method == 'POST':
         first_name=request.form.get("first_name")
         last_name = request.form.get("last_name")
@@ -79,6 +123,14 @@ def home_page():
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
+    """
+    Handles user registration.
+    
+    POST: Processes the signup form.
+          - Validates that email is not already used in 'registered' or 'client' tables.
+          - Inserts new user into 'client', 'registered', and 'registered_phone' tables.
+          - Automatically logs the user in after successful registration.
+    """
     if request.method == 'GET':
         return render_template('sign_up_form.html')
 
@@ -98,20 +150,20 @@ def signup():
 
     try:
         with db_curr() as cursor:
-            cursor.execute("SELECT 1 FROM Client WHERE Email_ID = %s LIMIT 1", (email,))
+            cursor.execute("SELECT 1 FROM client WHERE Email_ID = %s LIMIT 1", (email,))
             exists_in_client = cursor.fetchone() is not None
 
-            cursor.execute("SELECT 1 FROM Registered WHERE Email_R_ID = %s LIMIT 1", (email,))
+            cursor.execute("SELECT 1 FROM registered WHERE Email_R_ID = %s LIMIT 1", (email,))
             exists_in_registered = cursor.fetchone() is not None
 
             if exists_in_registered:
                 return render_template('sign_up_form.html', error="This email is already registered. Please login.")
 
             if not exists_in_client:
-                cursor.execute("INSERT INTO Client (Email_ID) VALUES (%s)", (email,))
+                cursor.execute("INSERT INTO client (Email_ID) VALUES (%s)", (email,))
 
             cursor.execute("""
-                INSERT INTO Registered
+                INSERT INTO registered
                 (Email_R_ID, Registration_date, Date_of_birth, Passport_number,
                  First_Name, Last_Name, Password)
                 VALUES (%s, CURDATE(), %s, %s, %s, %s, %s)
@@ -141,6 +193,10 @@ def signup():
 
 @app.route('/login/customer', methods=['GET', 'POST'])
 def login_customer():
+    """
+    Handles customer login (Registered Users).
+    Verifies credentials against the 'registered' table.
+    """
     if request.method == 'GET':
         return render_template('login_customer.html')
 
@@ -151,7 +207,7 @@ def login_customer():
         with db_curr() as cursor:
             cursor.execute("""
                 SELECT Email_R_ID, First_Name, Last_Name
-                FROM Registered
+                FROM registered
                 WHERE Email_R_ID = %s AND Password = %s
                 LIMIT 1
             """, (customer_email, customer_password))
@@ -171,6 +227,10 @@ def login_customer():
 
 @app.route('/login/manager', methods=['GET', 'POST'])
 def login_manager():
+    """
+    Handles manager login.
+    Verifies credentials against the 'manger' table (joined with 'employee').
+    """
     if request.method == 'GET':
         return render_template('login_manager.html')
 
@@ -181,8 +241,8 @@ def login_manager():
         with db_curr() as cursor:
             cursor.execute("""
                 SELECT e.E_ID, e.FirstName, e.LastName
-                FROM Manger m
-                JOIN Employee e ON e.E_ID = m.E_ID
+                FROM manger m
+                JOIN employee e ON e.E_ID = m.E_ID
                 WHERE m.E_ID = %s AND m.Password = %s
                 LIMIT 1
             """, (manager_id, manager_password))
@@ -202,6 +262,13 @@ def login_manager():
 
 
 def login_required(role=None):
+    """
+    Decorator to protect routes and ensure the user is logged in.
+    
+    Args:
+        role (str, optional): The required role ('manager', 'customer'). 
+                              If None, any logged-in user is allowed.
+    """
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
@@ -222,17 +289,30 @@ def logout():
 @app.route('/manager')
 @login_required(role="manager")
 def manager():
+    """
+    Renders the Manager Dashboard.
+    Access is restricted to users with the 'manager' role.
+    """
     return render_template('managers.html')
 
 @app.route('/search', methods=['GET', 'POST'])
 def search():
+    """
+    Flight search functionality.
+    
+    GET: Displays the search form with a list of available airports.
+    POST: Processes search criteria (Source, Destination, Date, Tickets).
+          - Executes a complex query to find 'Active' or 'Scheduled' flights.
+          - Checks seat availability dynamically.
+          - Returns a list of matched flights to the result page.
+    """
     # BLOCK MANAGERS
     if session.get("role") == "manager":
         flash("Error: Managers cannot purchase tickets on this site.", "error")
         return redirect(url_for("manager"))
 
     with db_curr() as cursor:
-        cursor.execute("SELECT Airport_Name FROM Airport ORDER BY Airport_Name")
+        cursor.execute("SELECT Airport_Name FROM airport ORDER BY Airport_Name")
         airports = [row[0] for row in cursor.fetchall()]
 
     if request.method == 'GET':
@@ -255,19 +335,21 @@ def search():
         SELECT f.F_ID, f.Status, f.Type,
                f.Date_of_flight, f.Time_of_flight,
                f.Date_of_Arrival, f.Time_of_Arrival
-        FROM Flight f
-        JOIN Route r ON f.R_ID = r.R_ID
+        FROM flight f
+        JOIN route r ON f.R_ID = r.R_ID
         WHERE r.Airport_Name_Source = %s
           AND r.Airport_Name_Dest = %s
           AND f.Status IN ('Active', 'Scheduled')
           AND TIMESTAMP(f.Date_of_flight, f.Time_of_flight) >= NOW()
           AND (
+                -- Subquery to ensure enough seats are available
+                -- Count total seats in the airplane MINUS seats already ticketed for this flight
                 SELECT COUNT(*)
-                FROM Seat s
+                FROM seat s
                 WHERE s.A_ID = f.A_ID
                   AND NOT EXISTS (
                     SELECT 1
-                    FROM Flight_Ticket t
+                    FROM flight_ticket t
                     WHERE t.F_ID = f.F_ID
                       AND t.Seat_A_ID = s.A_ID
                       AND t.Seat_Column = s.Column_Num
@@ -276,13 +358,7 @@ def search():
                   )
               ) >= %s
     """
-
-    params = [source, dest, num_tickets]
-
-    if date:
-        base_query += " AND f.Date_of_flight = %s"
-        params.append(date)
-
+    # The ORDER BY clause ensures flights are shown chronologically
     base_query += " ORDER BY f.Date_of_flight, f.Time_of_flight"
 
     with db_curr() as cursor:
@@ -314,6 +390,10 @@ def search():
 
 @app.route('/select-flight', methods=['POST'])
 def select_flight():
+    """
+    Intermediate step after flight search result selection.
+    Redirects the user to the seat selection page.
+    """
     if session.get("role") == "manager":
          flash("Error: Managers cannot purchase tickets on this site.", "error")
          return redirect(url_for("manager"))
@@ -329,6 +409,14 @@ def select_flight():
 
 @app.route('/choose-seats', methods=['GET', 'POST'])
 def choose_seats():
+    """
+    Seat selection map page.
+    
+    - Retrieves the airplane layout for the selected flight.
+    - Identifies which seats are already occupied (ticketed).
+    - Calculates pricing per seat based on Class (Economy/Business) using 'flight_class_price'.
+    - Renders an interactive seat map for the user to pick seats.
+    """
     if session.get("role") == "manager":
          flash("Error: Managers cannot purchase tickets on this site.", "error")
          return redirect(url_for("manager"))
@@ -345,18 +433,18 @@ def choose_seats():
 
     query_flight = """
         SELECT A_ID
-        FROM Flight
+        FROM flight
         WHERE F_ID=%s
         LIMIT 1
     """
 
     query_seats = """
         SELECT s.Column_Num, s.Row_Num, s.Class_Type
-        FROM Seat s
+        FROM seat s
         WHERE s.A_ID = %s
           AND NOT EXISTS (
             SELECT 1
-            FROM Flight_Ticket t
+            FROM flight_ticket t
             WHERE t.F_ID = %s
               AND t.Seat_A_ID = s.A_ID
               AND t.Seat_Column = s.Column_Num
@@ -423,6 +511,13 @@ def choose_seats():
 
 @app.route('/book-selected-seats', methods=['POST'])
 def book_selected_seats():
+    """
+    Initiates the booking process for the selected seats.
+    
+    - Handles booking for both Logged-in Customers and Guests.
+    - If user is a Guest, redirects to Guest Login while saving booking intent in session.
+    - If user is Logged-in, proceeds directly to booking execution.
+    """
     flight_id = request.form.get("flight_id")
     num_tickets = request.form.get("num_tickets", type=int)
     selected = request.form.getlist("seats")
@@ -448,6 +543,7 @@ def book_selected_seats():
 
 @app.route('/guest-login', methods=['GET'])
 def guest_login():
+    """Renders the guest login page."""
     return render_template('guest_login.html')
 
 @app.route('/guest-login', methods=['POST'])
@@ -459,14 +555,14 @@ def guest_login_post():
     # DB: Ensure Client + Guest exist
     with db_curr() as cursor:
         # Check if email belongs to a Registered user
-        cursor.execute("SELECT 1 FROM Registered WHERE Email_R_ID = %s LIMIT 1", (email,))
+        cursor.execute("SELECT 1 FROM registered WHERE Email_R_ID = %s LIMIT 1", (email,))
         if cursor.fetchone():
             return render_template('guest_login.html', 
                                    error="Registered users cannot book as guests.")
 
         try:
-            cursor.execute("INSERT IGNORE INTO Client (Email_ID) VALUES (%s)", (email,))
-            cursor.execute("INSERT IGNORE INTO Guest (Email_G_ID) VALUES (%s)", (email,))
+            cursor.execute("INSERT IGNORE INTO client (Email_ID) VALUES (%s)", (email,))
+            cursor.execute("INSERT IGNORE INTO guest (Email_G_ID) VALUES (%s)", (email,))
         except mysql.connector.Error as err:
              return render_template('guest_login.html', error=f"Database error: {err}")
 
@@ -488,6 +584,17 @@ def guest_login_post():
     return redirect(url_for("home_page"))
 
 def _perform_booking(customer_email, flight_id, num_tickets, selected):
+    """
+    Executes the booking transaction.
+    
+    1. Re-validates seat availability and pricing.
+    2. Calculates total price and cancellation fee.
+    3. Creates a new 'Booking' record.
+    4. Creates 'Flight_Ticket' records for each selected seat.
+    
+    Returns:
+        Rendered success page with booking details or error message.
+    """
     # Re-verify counts
     if len(selected) != num_tickets:
          return redirect(url_for("search")) # Or better error handling
@@ -511,7 +618,7 @@ def _perform_booking(customer_email, flight_id, num_tickets, selected):
         if not prices:
              return render_template("booking_success.html", error=f"System Error: No price data found for Flight {flight_id}. Please contact support.")
 
-        cursor.execute("SELECT A_ID FROM Flight WHERE F_ID=%s LIMIT 1", (flight_id,))
+        cursor.execute("SELECT A_ID FROM flight WHERE F_ID=%s LIMIT 1", (flight_id,))
         fr = cursor.fetchone()
         if not fr:
             return redirect(url_for("search"))
@@ -519,10 +626,10 @@ def _perform_booking(customer_email, flight_id, num_tickets, selected):
 
         check_seat_available = """
             SELECT 1
-            FROM Seat s
+            FROM seat s
             WHERE s.A_ID=%s AND s.Column_Num=%s AND s.Row_Num=%s AND s.Class_Type=%s
               AND NOT EXISTS (
-                SELECT 1 FROM Flight_Ticket t
+                SELECT 1 FROM flight_ticket t
                 WHERE t.F_ID=%s
                   AND t.Seat_A_ID=s.A_ID
                   AND t.Seat_Column=s.Column_Num
@@ -556,25 +663,25 @@ def _perform_booking(customer_email, flight_id, num_tickets, selected):
 
         calc_cancellation_fee = calc_total_price * 0.05
 
-        cursor.execute("SELECT COALESCE(MAX(B_ID), 0) + 1 FROM Booking")
+        cursor.execute("SELECT COALESCE(MAX(B_ID), 0) + 1 FROM booking")
         booking_id = cursor.fetchone()[0]
 
         cursor.execute(
             """
-            INSERT INTO Booking (B_ID, Status, Price, Cancellation_Fee, booking_date, booking_time, Client_Email)
+            INSERT INTO booking (B_ID, Status, Price, Cancellation_Fee, booking_date, booking_time, Client_Email)
             VALUES (%s, %s, %s, %s, CURDATE(), CURTIME(), %s)
             """,
             (booking_id, "Confirmed", calc_total_price, calc_cancellation_fee, customer_email)
         )
 
-        cursor.execute("SELECT COALESCE(MAX(Ticket_ID), 0) + 1 FROM Flight_Ticket")
+        cursor.execute("SELECT COALESCE(MAX(Ticket_ID), 0) + 1 FROM flight_ticket")
         next_ticket_id = cursor.fetchone()[0]
 
         tickets_created = []
         for col, row_num, class_type in parsed:
             cursor.execute(
                 """
-                INSERT INTO Flight_Ticket
+                INSERT INTO flight_ticket
                 (Ticket_ID, Status, Seat_Column, Seat_Row, Seat_A_ID, Seat_Class_Type, F_ID, B_ID)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
@@ -593,6 +700,14 @@ def _perform_booking(customer_email, flight_id, num_tickets, selected):
 
 @app.route('/my-bookings')
 def my_bookings():
+    """
+    Displays the user's booking history.
+    
+    - Fetches all bookings associated with the logged-in email.
+    - Classifies bookings into 'Upcoming' and 'Past'.
+    - Determines if a booking is eligible for cancellation (must be > 36h before flight).
+    - Supports filtering by status (Confirmed, Cancelled, etc.).
+    """
     if session.get("role") not in ["customer", "guest"]:
         return redirect(url_for("login_customer"))
 
@@ -601,7 +716,7 @@ def my_bookings():
         return redirect(url_for("login_customer"))
 
     # 1. Fetch available statuses for this user for filter dropdown
-    status_query = "SELECT DISTINCT Status FROM Booking WHERE Client_Email = %s"
+    status_query = "SELECT DISTINCT Status FROM booking WHERE Client_Email = %s"
     available_statuses = []
     with db_curr() as cursor:
         cursor.execute(status_query, (email,))
@@ -624,9 +739,9 @@ def my_bookings():
             MIN(t.F_ID) AS any_flight_id,
             MIN(f.Date_of_flight) AS flight_date,
             MIN(f.Time_of_flight) AS flight_time
-        FROM Booking b
-        JOIN Flight_Ticket t ON t.B_ID = b.B_ID
-        JOIN Flight f ON f.F_ID = t.F_ID
+        FROM booking b
+        JOIN flight_ticket t ON t.B_ID = b.B_ID
+        JOIN flight f ON f.F_ID = t.F_ID
         WHERE b.Client_Email = %s
         """
     ]
@@ -704,6 +819,15 @@ def my_bookings():
 
 @app.route('/find-booking', methods=['GET', 'POST'])
 def find_booking():
+    """
+    Allows guests (and customers) to view a specific booking by Email and Booking ID.
+    
+    GET: Renders the search form.
+    POST: Finds the booking.
+          - If valid, displays booking details.
+          - Checks cancellation eligibility (36h rule).
+          - Temporarily logs in the user as a 'guest' to facilitate cancellation actions if needed.
+    """
     if request.method == 'GET':
         return render_template('find_booking.html')
 
@@ -723,9 +847,9 @@ def find_booking():
             MIN(t.F_ID) AS any_flight_id,
             MIN(f.Date_of_flight) AS flight_date,
             MIN(f.Time_of_flight) AS flight_time
-        FROM Booking b
-        JOIN Flight_Ticket t ON t.B_ID = b.B_ID
-        JOIN Flight f ON f.F_ID = t.F_ID
+        FROM booking b
+        JOIN flight_ticket t ON t.B_ID = b.B_ID
+        JOIN flight f ON f.F_ID = t.F_ID
         WHERE b.Client_Email = %s AND b.B_ID = %s
         GROUP BY b.B_ID, b.Status, b.booking_date, b.booking_time
     """
@@ -771,6 +895,16 @@ def find_booking():
 
 @app.route("/cancel-booking/<int:booking_id>", methods=["POST"])
 def cancel_booking(booking_id):
+    """
+    Handles booking cancellation.
+    
+    1. Verifies user ownership of the booking.
+    2. Checks the 36-hour cancellation policy.
+    3. Performs a 'Soft Delete':
+       - Updates Booking status to 'Cancelled'.
+       - Updates associated Tickets status to 'Cancelled'.
+       - Updates Price to represent the cancellation fee (5% of original).
+    """
     if session.get("role") not in ["customer", "guest"]:
         return redirect(url_for("login_customer"))
 
@@ -794,7 +928,7 @@ def cancel_booking(booking_id):
 
         # 1) Verify booking belongs to this customer
         cursor.execute(
-            "SELECT 1 FROM Booking WHERE B_ID = %s AND Client_Email = %s LIMIT 1",
+            "SELECT 1 FROM booking WHERE B_ID = %s AND Client_Email = %s LIMIT 1",
             (booking_id, email)
         )
         if cursor.fetchone() is None:
@@ -807,8 +941,8 @@ def cancel_booking(booking_id):
         # If the flight is within 36 hours from NOW(), we find a row -> Block it.
         cursor.execute("""
             SELECT 1
-            FROM Flight_Ticket T
-            JOIN Flight F ON T.F_ID = F.F_ID
+            FROM flight_ticket T
+            JOIN flight F ON T.F_ID = F.F_ID
             WHERE T.B_ID = %s
               AND TIMESTAMP(F.Date_of_flight, F.Time_of_flight) < DATE_ADD(NOW(), INTERVAL 36 HOUR)
             LIMIT 1
@@ -820,11 +954,11 @@ def cancel_booking(booking_id):
             return redirect(url_for("my_bookings"))
 
         # 2) Soft delete: Update tickets status
-        cursor.execute("UPDATE Flight_Ticket SET Status = 'Cancelled' WHERE B_ID = %s", (booking_id,))
+        cursor.execute("UPDATE flight_ticket SET Status = 'Cancelled' WHERE B_ID = %s", (booking_id,))
 
         # 3) Update booking: Status='Cancelled', Price = 5% of original
         # We assume 'Price' currently holds the transaction total.
-        cursor.execute("UPDATE Booking SET Status = 'Cancelled', Price = Price * 0.05 WHERE B_ID = %s", (booking_id,))
+        cursor.execute("UPDATE booking SET Status = 'Cancelled', Price = Price * 0.05 WHERE B_ID = %s", (booking_id,))
 
         mydb.commit()
         return redirect(url_for("my_bookings"))
@@ -846,8 +980,8 @@ def cancel_booking(booking_id):
 @login_required(role="manager")
 def manager_flights():
     """
-    מנהל רואה את כל הטיסות + אפשרות סינון לפי סטטוס:
-    Active / Full / Completed / Cancelled
+    Manager view for all flights.
+    Supports filtering by computed status: Active, Full, Completed, Cancelled.
     """
     status_filter = (request.args.get("status") or "All").strip()
 
@@ -862,10 +996,10 @@ def manager_flights():
             f.Time_of_Arrival,
             r.Airport_Name_Source,
             r.Airport_Name_Dest,
-            (SELECT COUNT(*) FROM Seat s WHERE s.A_ID = f.A_ID) AS total_seats,
-            (SELECT COUNT(*) FROM Flight_Ticket t WHERE t.F_ID = f.F_ID) AS booked_seats
-        FROM Flight f
-        JOIN Route r ON r.R_ID = f.R_ID
+            (SELECT COUNT(*) FROM seat s WHERE s.A_ID = f.A_ID) AS total_seats,
+            (SELECT COUNT(*) FROM flight_ticket t WHERE t.F_ID = f.F_ID) AS booked_seats
+        FROM flight f
+        JOIN route r ON r.R_ID = f.R_ID
         ORDER BY f.Date_of_flight DESC, f.Time_of_flight DESC
     """
 
@@ -884,7 +1018,7 @@ def manager_flights():
         flight_time = _mysql_time_to_timeobj(r[4])
         flight_dt = datetime.combine(r[3], flight_time)
 
-        # סטטוס "מחושב" לפי דרישות ההנחיה
+        # Computed status based on assignment requirements
         if (r[1] or "").lower() == "cancelled":
             computed = "Cancelled"
         elif flight_dt < now:
@@ -920,15 +1054,23 @@ def manager_flights():
 @app.route("/manager/flights/add", methods=["GET", "POST"])
 @login_required(role="manager")
 def manager_add_flight():
+    """
+    Multi-stage process to publish a new flight.
+    
+    1. Validates inputs (Airplane capability vs Route, Crew training).
+    2. Suggests available Crew (Pilots/Attendants) based on schedule and training.
+    3. Prevents scheduling if insufficient crew is available.
+    4. Creates Flight, Flight_Class_Price, and Flight_Crew records transactionally.
+    """
 
     def load_dropdowns():
         with db_curr() as cursor:
-            cursor.execute("SELECT A_ID, Size FROM Airplane ORDER BY A_ID")
+            cursor.execute("SELECT A_ID, Size FROM airplane ORDER BY A_ID")
             airplanes_local = cursor.fetchall()
 
             cursor.execute("""
                 SELECT R_ID, Airport_Name_Source, Airport_Name_Dest, Flight_Duration
-                FROM Route
+                FROM route
                 ORDER BY R_ID
             """)
             routes_local = cursor.fetchall()
@@ -968,7 +1110,7 @@ def manager_add_flight():
 
     with db_curr() as cursor:
         # 1) airplane size
-        cursor.execute("SELECT Size FROM Airplane WHERE A_ID = %s", (a_id,))
+        cursor.execute("SELECT Size FROM airplane WHERE A_ID = %s", (a_id,))
         arow = cursor.fetchone()
         if not arow:
             return render_template("manager_add_flight.html", airplanes=airplanes, routes=routes,
@@ -976,7 +1118,7 @@ def manager_add_flight():
         airplane_size = (arow[0] or "").strip().lower()
 
         # 2) route duration
-        cursor.execute("SELECT Flight_Duration FROM Route WHERE R_ID = %s", (r_id,))
+        cursor.execute("SELECT Flight_Duration FROM route WHERE R_ID = %s", (r_id,))
         rrow = cursor.fetchone()
         if not rrow or rrow[0] is None:
             return render_template("manager_add_flight.html", airplanes=airplanes, routes=routes,
@@ -1012,14 +1154,14 @@ def manager_add_flight():
         # pilots available: trained if long + not busy in overlapping flight
         pilot_query = """
         SELECT e.E_ID, e.FirstName, e.LastName
-        FROM Pilot p
-        JOIN Employee e ON e.E_ID = p.E_ID
+        FROM pilot p
+        JOIN employee e ON e.E_ID = p.E_ID
         WHERE
           (%s = 'short' OR LOWER(p.Training_for_long_flights) = 'yes')
           AND NOT EXISTS (
             SELECT 1
-            FROM Flight_Crew fc
-            JOIN Flight f ON f.F_ID = fc.F_ID
+            FROM flight_crew fc
+            JOIN flight f ON f.F_ID = fc.F_ID
             WHERE fc.E_ID = e.E_ID
               AND LOWER(f.Status) <> 'cancelled'
               AND TIMESTAMP(f.Date_of_flight, f.Time_of_flight) < %s
@@ -1033,14 +1175,14 @@ def manager_add_flight():
         # attendants available: trained if long + not busy in overlapping flight
         att_query = """
         SELECT e.E_ID, e.FirstName, e.LastName
-        FROM Flight_Attendant fa
-        JOIN Employee e ON e.E_ID = fa.E_ID
+        FROM flight_attendant fa
+        JOIN employee e ON e.E_ID = fa.E_ID
         WHERE
           (%s = 'short' OR LOWER(fa.Training_for_long_flights) = 'yes')
           AND NOT EXISTS (
             SELECT 1
-            FROM Flight_Crew fc
-            JOIN Flight f ON f.F_ID = fc.F_ID
+            FROM flight_crew fc
+            JOIN flight f ON f.F_ID = fc.F_ID
             WHERE fc.E_ID = e.E_ID
               AND LOWER(f.Status) <> 'cancelled'
               AND TIMESTAMP(f.Date_of_flight, f.Time_of_flight) < %s
@@ -1135,7 +1277,7 @@ def manager_add_flight():
         # insert flight
         new_f_id = next_id(cursor, "Flight", "F_ID")
         cursor.execute("""
-            INSERT INTO Flight
+            INSERT INTO flight
             (F_ID, Status, Type, Date_of_flight, Time_of_flight,
              Date_of_Arrival, Time_of_Arrival, A_ID, R_ID)
             VALUES
@@ -1158,13 +1300,13 @@ def manager_add_flight():
         # insert crew assignments
         for e_id in selected_pilots:
             cursor.execute(
-                "INSERT INTO Flight_Crew (E_ID, F_ID, Duty) VALUES (%s, %s, %s)",
+                "INSERT INTO flight_crew (E_ID, F_ID, Duty) VALUES (%s, %s, %s)",
                 (int(e_id), new_f_id, "Pilot")
             )
 
         for e_id in selected_attendants:
             cursor.execute(
-                "INSERT INTO Flight_Crew (E_ID, F_ID, Duty) VALUES (%s, %s, %s)",
+                "INSERT INTO flight_crew (E_ID, F_ID, Duty) VALUES (%s, %s, %s)",
                 (int(e_id), new_f_id, "Attendant")
             )
 
@@ -1175,9 +1317,8 @@ def manager_add_flight():
 @login_required(role="manager")
 def manager_add_crew():
     """
-    הוספת אנשי צוות.
-    הערה: מאחר ובקבצים שהעלית אין את סכמת Employee/Pilot/Attendant המלאה,
-    ייתכן שתצטרכי להתאים שמות טבלאות/עמודות.
+    Adds a new crew member (Pilot or Attendant).
+    Inserts into the base 'Employee' table and the specific role table.
     """
     if request.method == "GET":
         return render_template("manager_add_crew.html")
@@ -1191,17 +1332,17 @@ def manager_add_crew():
         return render_template("manager_add_crew.html", error="Please fill all fields.")
 
     with db_curr() as cursor:
-        # מינימום: Employee(E_ID, FirstName, LastName) - תתאימי אם יש עוד שדות חובה
+        # Minimum: Employee(E_ID, FirstName, LastName)
         cursor.execute("""
-            INSERT INTO Employee (E_ID, FirstName, LastName)
+            INSERT INTO employee (E_ID, FirstName, LastName)
             VALUES (%s, %s, %s)
         """, (e_id, first, last))
 
-        # טבלאות תפקיד (ייתכן שהשמות אצלכם שונים)
+        # Role tables insertion
         if role.lower() == "pilot":
-            cursor.execute("INSERT INTO Pilot (E_ID) VALUES (%s)", (e_id,))
+            cursor.execute("INSERT INTO pilot (E_ID) VALUES (%s)", (e_id,))
         elif role.lower() == "attendant":
-            cursor.execute("INSERT INTO Attendant (E_ID) VALUES (%s)", (e_id,))
+            cursor.execute("INSERT INTO flight_attendant (E_ID) VALUES (%s)", (e_id,))
         else:
             return render_template("manager_add_crew.html", error="Role must be Pilot or Attendant.")
 
@@ -1211,12 +1352,17 @@ def manager_add_crew():
 @login_required(role="manager")
 def manager_cancel_flight(flight_id):
     """
-    Cancel flight only up to 72 hours before.
-    When cancelled: all active bookings on that flight get full refund => Booking.Price = 0.
+    Cancels a flight (allowed only up to 72 hours before departure).
+    
+    Actions:
+    1. Verifies 72h rule.
+    2. Updates Flight status to 'Cancelled'.
+    3. Updates associated Tickets to 'Cancelled'.
+    4. Refunds all bookings (Price=0) and marks them as 'Manager Cancelled'.
     """
     with db_curr() as cursor:
         cursor.execute(
-            "SELECT Date_of_flight, Time_of_flight, Status FROM Flight WHERE F_ID=%s LIMIT 1",
+            "SELECT Date_of_flight, Time_of_flight, Status FROM flight WHERE F_ID=%s LIMIT 1",
             (flight_id,)
         )
         row = cursor.fetchone()
@@ -1237,18 +1383,18 @@ def manager_cancel_flight(flight_id):
             return redirect(url_for("manager_flights"))
 
         # 1) update flight status
-        cursor.execute("UPDATE Flight SET Status='Cancelled' WHERE F_ID=%s", (flight_id,))
+        cursor.execute("UPDATE flight SET Status='Cancelled' WHERE F_ID=%s", (flight_id,))
 
         # 2) cancel tickets (optional but logical)
-        cursor.execute("UPDATE Flight_Ticket SET Status='Cancelled' WHERE F_ID=%s", (flight_id,))
+        cursor.execute("UPDATE flight_ticket SET Status='Cancelled' WHERE F_ID=%s", (flight_id,))
 
         # 3) refund bookings => Price = 0 AND Status = Manager Cancelled
         cursor.execute("""
-            UPDATE Booking
+            UPDATE booking
             SET Price = 0, Cancellation_Fee = 0, Status = 'Manager Cancelled'
             WHERE B_ID IN (
                 SELECT DISTINCT B_ID
-                FROM Flight_Ticket
+                FROM flight_ticket
                 WHERE F_ID = %s
             )
         """, (flight_id,))
@@ -1259,14 +1405,18 @@ def manager_cancel_flight(flight_id):
 @app.route("/manager/flights/<int:flight_id>/crew")
 @login_required(role="manager")
 def manager_flight_crew(flight_id):
+    """
+    Displays the crew assigned to a specific flight.
+    Sorted by rank: Pilot, then Attendant.
+    """
     query = """
         SELECT
             e.E_ID,
             e.FirstName,
             e.LastName,
             fc.Duty
-        FROM Flight_Crew fc
-        JOIN Employee e ON e.E_ID = fc.E_ID
+        FROM flight_crew fc
+        JOIN employee e ON e.E_ID = fc.E_ID
         WHERE fc.F_ID = %s
         ORDER BY
             CASE
@@ -1291,15 +1441,27 @@ def manager_flight_crew(flight_id):
 @app.route("/manager/reports")
 @login_required(role="manager")
 def manager_reports():
-    # --- Queries (updated / safer) ---
+    """
+    Generates comprehensive analytical reports for the manager.
+    Includes data on:
+    - Occupancy Rates
+    - Total Revenue
+    - Employee Flight Hours
+    - Cancellation Rates per month
+    - Monthly Airplane Activity (via CTEs)
+    """
+    # --- Queries ---
+    
+    # 1. Average Occupancy: 
+    # Calculates the percentage of occupied seats for all past flights.
     q_avg_occupancy = """
     SELECT AVG(Occupancy_Rate) * 100 AS Average_Occupancy_Percentage
     FROM (
         SELECT 
             f.F_ID,
-            1.0 * (SELECT COUNT(*) FROM Flight_Ticket ft WHERE ft.F_ID = f.F_ID) /
-            NULLIF((SELECT COUNT(*) FROM Seat s WHERE s.A_ID = f.A_ID), 0) AS Occupancy_Rate
-        FROM Flight f
+            1.0 * (SELECT COUNT(*) FROM flight_ticket ft WHERE ft.F_ID = f.F_ID) /
+            NULLIF((SELECT COUNT(*) FROM seat s WHERE s.A_ID = f.A_ID), 0) AS Occupancy_Rate
+        FROM flight f
         WHERE 
             f.Date_of_Arrival < CURRENT_DATE
             OR (f.Date_of_Arrival = CURRENT_DATE AND f.Time_of_Arrival < CURRENT_TIME)
@@ -1308,7 +1470,7 @@ def manager_reports():
 
     # Revenue by plane size/manufacturer/class using ticket prices from Flight
     # 1. Total Net Revenue (Cash in hand: Active Bookings + Cancellation Fees)
-    q_total_revenue = "SELECT COALESCE(SUM(Price), 0) FROM Booking"
+    q_total_revenue = "SELECT COALESCE(SUM(Price), 0) FROM booking"
 
     # 2. Operational Revenue by Airplane/Class (Active Flights Only)
     # Calculates theoretical revenue based on flight ticket prices for active bookings.
@@ -1319,46 +1481,18 @@ def manager_reports():
         a.Manufacturer,
         ft.Seat_Class_Type AS Class_Type,
         SUM(fcp.Ticket_Price) AS Active_Revenue
-    FROM Flight_Ticket ft
-    JOIN Flight f ON ft.F_ID = f.F_ID
-    JOIN Airplane a ON f.A_ID = a.A_ID
+    FROM flight_ticket ft
+    JOIN flight f ON ft.F_ID = f.F_ID
+    JOIN airplane a ON f.A_ID = a.A_ID
     JOIN flight_class_price fcp ON f.F_ID = fcp.F_ID 
         AND fcp.Seat_Class_Type = ft.Seat_Class_Type
-    JOIN Booking b ON ft.B_ID = b.B_ID
+    JOIN booking b ON ft.B_ID = b.B_ID
     WHERE b.Status NOT LIKE '%Cancel%'
     GROUP BY a.Size, a.Manufacturer, ft.Seat_Class_Type
     ORDER BY a.Size, a.Manufacturer, ft.Seat_Class_Type;
     """
 
-    q_employee_hours = """
-    SELECT 
-        e.FirstName, 
-        e.LastName,
-        CASE 
-            WHEN r.Flight_Duration >= 6 THEN 'Long Flight'
-            ELSE 'Short Flight'
-        END AS Flight_Category,
-        SUM(r.Flight_Duration) AS Total_Flight_Hours
-    FROM Employee e
-    JOIN Flight_Crew fc ON e.E_ID = fc.E_ID
-    JOIN Flight f       ON fc.F_ID = f.F_ID
-    JOIN Route r        ON f.R_ID = r.R_ID
-    WHERE f.Status <> 'Cancelled'
-    GROUP BY e.E_ID, e.FirstName, e.LastName, Flight_Category
-    ORDER BY e.FirstName, e.LastName;
-    """
 
-    q_cancellation_rate = """
-    SELECT
-        YEAR(Booking_Date) as Year,
-        MONTH(Booking_Date) as Month,
-        COUNT(*) as Total_Bookings,
-        SUM(CASE WHEN Status LIKE '%Cancel%' THEN 1 ELSE 0 END) as Cancelled_Bookings,
-        (SUM(CASE WHEN Status LIKE '%Cancel%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) as Cancellation_Rate
-    FROM Booking
-    GROUP BY YEAR(Booking_Date), MONTH(Booking_Date)
-    ORDER BY Year DESC, Month DESC;
-    """
 
     # ... (existing activity query construction lines 1371-1425 assumed unchanged if not included here, targeting main block) ...
 
@@ -1371,10 +1505,10 @@ def manager_reports():
             ELSE 'Short Flight'
         END AS Flight_Category,
         SUM(r.Flight_Duration) AS Total_Flight_Hours
-    FROM Employee e
-    JOIN Flight_Crew fc ON e.E_ID = fc.E_ID
-    JOIN Flight f       ON fc.F_ID = f.F_ID
-    JOIN Route r        ON f.R_ID = r.R_ID
+    FROM employee e
+    JOIN flight_crew fc ON e.E_ID = fc.E_ID
+    JOIN flight f       ON fc.F_ID = f.F_ID
+    JOIN route r        ON f.R_ID = r.R_ID
     WHERE f.Status <> 'Cancelled'
     GROUP BY e.E_ID, e.FirstName, e.LastName, Flight_Category
     ORDER BY e.FirstName, e.LastName;
@@ -1387,7 +1521,7 @@ def manager_reports():
         COUNT(*) AS Total_Bookings,
         SUM(Status = 'Cancelled') AS Customer_Canceled_Bookings,
         ROUND(100 * SUM(Status = 'Cancelled') / COUNT(*), 2) AS Cancellation_Rate_Percentage
-    FROM Booking
+    FROM booking
     WHERE Booking_Date IS NOT NULL
     GROUP BY YEAR(booking_date), MONTH(booking_date)
     ORDER BY YEAR(booking_date) ASC, MONTH(booking_date) ASC;
@@ -1414,6 +1548,8 @@ def manager_reports():
         where_clause = ""
     
     q_monthly_airplane_activity = f"""
+    -- CTE 1: Basic Monthly Statistics
+    -- Aggregates performed/cancelled flights and calculates utilization rate.
     WITH MonthlyBasicStats AS (
         SELECT 
             A_ID,
@@ -1422,10 +1558,12 @@ def manager_reports():
             SUM(CASE WHEN Status <> 'Cancelled' THEN 1 ELSE 0 END) AS Performed_Flights,
             SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) AS Cancelled_Flights,
             COUNT(DISTINCT CASE WHEN Status <> 'Cancelled' THEN Date_of_flight END) / 30.0 AS Utilization_Rate
-        FROM Flight
+        FROM flight
         {where_clause}
         GROUP BY A_ID, Flight_Year, Flight_Month
     ),
+    -- CTE 2: Route Frequency Ranking
+    -- Ranks routes by frequency for each airplane/month to find the "Dominant Route".
     RouteFrequency AS (
         SELECT 
             A_ID,
@@ -1436,7 +1574,7 @@ def manager_reports():
                 PARTITION BY A_ID, YEAR(Date_of_flight), MONTH(Date_of_flight)
                 ORDER BY COUNT(*) DESC
             ) AS Route_Rank
-        FROM Flight
+        FROM flight
         WHERE Status <> 'Cancelled'
         {"AND " + where_clause[6:] if where_clause else ""}
         GROUP BY A_ID, Flight_Year, Flight_Month, R_ID
@@ -1455,91 +1593,18 @@ def manager_reports():
         AND ms.Flight_Year = rf.Flight_Year 
         AND ms.Flight_Month = rf.Flight_Month 
         AND rf.Route_Rank = 1
-    LEFT JOIN Route r ON rf.R_ID = r.R_ID
+    LEFT JOIN route r ON rf.R_ID = r.R_ID
     ORDER BY ms.Flight_Year DESC, ms.Flight_Month DESC, ms.A_ID;
     """
 
-    with db_curr() as cursor:
-        cursor.execute(q_avg_occupancy)
-        avg_occ_row = cursor.fetchone()
-        avg_occupancy = float(avg_occ_row[0]) if avg_occ_row and avg_occ_row[0] is not None else 0.0
 
-        cursor.execute(q_total_revenue)
-        total_rev_row = cursor.fetchone()
-        total_revenue_all = float(total_rev_row[0]) if total_rev_row and total_rev_row[0] is not None else 0.0
-
-        cursor.execute(q_revenue_by_airplane_class)
-        revenue_rows = cursor.fetchall()
-        
-        cursor.execute(q_employee_hours)
-        emp_rows = cursor.fetchall()
-
-        cursor.execute(q_cancellation_rate)
-        cancel_rows = cursor.fetchall()
-
-        cursor.execute(q_monthly_airplane_activity)
-        activity_rows = cursor.fetchall()
-
-    # --- Shape data for template ---
-    revenue = [
-        {"Airplane_Size": r[0], "Manufacturer": r[1], "Class_Type": r[2], "Total_Revenue": float(r[3] or 0), "Active_Revenue": float(r[3] or 0)}
-        for r in revenue_rows
-    ]
-
-    employee_hours = [
-        {"FirstName": r[0], "LastName": r[1], "Category": r[2], "Hours": float(r[3] or 0)}
-        for r in emp_rows
-    ]
     
     # Needs to be injected into the query. Since we have CTEs with GROUP BY, 
     # we should filter inside the CTEs before grouping for efficiency and correctness.
     # However, for simplicity and safety against SQL injection with f-strings (though input is cast to int),
     # let's construct the query dynamically.
     
-    q_monthly_airplane_activity = f"""
-    WITH MonthlyBasicStats AS (
-        SELECT 
-            A_ID,
-            YEAR(Date_of_flight) AS Flight_Year,
-            MONTH(Date_of_flight) AS Flight_Month,
-            SUM(CASE WHEN Status <> 'Cancelled' THEN 1 ELSE 0 END) AS Performed_Flights,
-            SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) AS Cancelled_Flights,
-            COUNT(DISTINCT CASE WHEN Status <> 'Cancelled' THEN Date_of_flight END) / 30.0 AS Utilization_Rate
-        FROM Flight
-        {where_clause}
-        GROUP BY A_ID, Flight_Year, Flight_Month
-    ),
-    RouteFrequency AS (
-        SELECT 
-            A_ID,
-            YEAR(Date_of_flight) AS Flight_Year,
-            MONTH(Date_of_flight) AS Flight_Month,
-            R_ID,
-            ROW_NUMBER() OVER (
-                PARTITION BY A_ID, YEAR(Date_of_flight), MONTH(Date_of_flight)
-                ORDER BY COUNT(*) DESC
-            ) AS Route_Rank
-        FROM Flight
-        WHERE Status <> 'Cancelled'
-        {"AND " + where_clause[6:] if where_clause else ""}
-        GROUP BY A_ID, Flight_Year, Flight_Month, R_ID
-    )
-    SELECT 
-        ms.A_ID,
-        ms.Flight_Year,
-        ms.Flight_Month,
-        ms.Performed_Flights AS Num_Flights_Performed,
-        ms.Cancelled_Flights AS Num_Flights_Cancelled,
-        ms.Utilization_Rate AS Monthly_Utilization,
-        CONCAT(r.Airport_Name_Source, ' -> ', r.Airport_Name_Dest) AS Dominant_Route
-    FROM MonthlyBasicStats ms
-    LEFT JOIN RouteFrequency rf ON ms.A_ID = rf.A_ID 
-        AND ms.Flight_Year = rf.Flight_Year 
-        AND ms.Flight_Month = rf.Flight_Month 
-        AND rf.Route_Rank = 1
-    LEFT JOIN Route r ON rf.R_ID = r.R_ID
-    ORDER BY ms.Flight_Year DESC, ms.Flight_Month DESC, ms.A_ID;
-    """
+
 
     with db_curr() as cursor:
         cursor.execute(q_avg_occupancy)
@@ -1554,7 +1619,7 @@ def manager_reports():
         revenue_rows = cursor.fetchall()
         
         # Detect all airplanes to populate missing rows with 0
-        cursor.execute("SELECT DISTINCT Size, Manufacturer FROM Airplane")
+        cursor.execute("SELECT DISTINCT Size, Manufacturer FROM airplane")
         all_planes_rows = cursor.fetchall()
 
         cursor.execute(q_employee_hours)
@@ -1592,13 +1657,13 @@ def manager_reports():
 
     # --- Fetch Distinct Values for Filters ---
     with db_curr() as cursor:
-        cursor.execute("SELECT DISTINCT YEAR(Date_of_flight) FROM Flight ORDER BY 1 DESC")
+        cursor.execute("SELECT DISTINCT YEAR(Date_of_flight) FROM flight ORDER BY 1 DESC")
         avail_years = [r[0] for r in cursor.fetchall() if r[0]]
 
-        cursor.execute("SELECT DISTINCT MONTH(Date_of_flight) FROM Flight ORDER BY 1")
+        cursor.execute("SELECT DISTINCT MONTH(Date_of_flight) FROM flight ORDER BY 1")
         avail_months = [r[0] for r in cursor.fetchall() if r[0]]
 
-        cursor.execute("SELECT DISTINCT A_ID FROM Airplane ORDER BY 1")
+        cursor.execute("SELECT DISTINCT A_ID FROM airplane ORDER BY 1")
         avail_aids = [r[0] for r in cursor.fetchall() if r[0]]
 
     return render_template(
@@ -1616,6 +1681,10 @@ def manager_reports():
 
 @app.route('/booking-review', methods=['POST'])
 def booking_review_page():
+    """
+    Review page before final booking confirmation.
+    Calculates exact totals including seats and class differences.
+    """
     flight_id = request.form.get("flight_id")
     seats = request.form.getlist("seats")
 
@@ -1672,6 +1741,10 @@ def booking_review_page():
 
 @app.route('/manager/add-staff', methods=['GET', 'POST'])
 def manager_add_staff():
+    """
+    Manager Add Staff Page.
+    Allows adding new employees (Pilots/Attendants) to the system.
+    """
     if session.get("role") != "manager":
         return redirect(url_for("login_manager"))
 
@@ -1697,14 +1770,14 @@ def manager_add_staff():
     try:
         with db_curr() as cursor:
             # 1. Check if ID exists (Optional, but friendly)
-            cursor.execute("SELECT 1 FROM Employee WHERE E_ID = %s", (e_id,))
+            cursor.execute("SELECT 1 FROM employee WHERE E_ID = %s", (e_id,))
             if cursor.fetchone():
                  return render_template('manager_add_staff.html', error=f"Employee ID {e_id} already exists.")
 
             # 2. Insert into Employee
             # Note: DB column is 'HoushNumber' based on user image.
             cursor.execute("""
-                INSERT INTO Employee 
+                INSERT INTO employee 
                 (E_ID, PhoneNumber, StartDateOfEmployment, FirstName, LastName, City, Street, HoushNumber)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (e_id, phone, start_date, first_name, last_name, city, street, house_num))
@@ -1712,7 +1785,7 @@ def manager_add_staff():
             # 3. Insert into Role Table
             if role == "pilot":
                 cursor.execute("""
-                    INSERT INTO Pilot (E_ID, Training_for_long_flights)
+                    INSERT INTO pilot (E_ID, Training_for_long_flights)
                     VALUES (%s, %s)
                 """, (e_id, training_ok))
             elif role == "attendant":
