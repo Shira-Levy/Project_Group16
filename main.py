@@ -361,6 +361,8 @@ def search():
     # The ORDER BY clause ensures flights are shown chronologically
     base_query += " ORDER BY f.Date_of_flight, f.Time_of_flight"
 
+    params = [source, dest, num_tickets]
+
     with db_curr() as cursor:
         cursor.execute(base_query, tuple(params))
         rows = cursor.fetchall()
@@ -917,13 +919,22 @@ def cancel_booking(booking_id):
     cursor = None
 
     try:
-        mydb = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="rootroot",
-            database="flytau_db",
-            autocommit=False
-        )
+        if "PYTHONANYWHERE_DOMAIN" in os.environ:
+            mydb = mysql.connector.connect(
+                host="ShiraLevy.mysql.pythonanywhere-services.com",
+                user="ShiraLevy",
+                password="rootroot",
+                database="ShiraLevy$flytau_db",
+                autocommit=False
+            )
+        else:
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="rootroot",
+                database="flytau_db",
+                autocommit=False
+            )
         cursor = mydb.cursor()
 
         # 1) Verify booking belongs to this customer
