@@ -1275,7 +1275,7 @@ def manager_add_flight():
             )
 
         # insert flight
-        new_f_id = next_id(cursor, "Flight", "F_ID")
+        new_f_id = next_id(cursor, "flight", "F_ID")
         cursor.execute("""
             INSERT INTO flight
             (F_ID, Status, Type, Date_of_flight, Time_of_flight,
